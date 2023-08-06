@@ -1,186 +1,4 @@
-// Winner.cpp : Defines the entry point for the application.
-//
-/*
-#include "framework.h"
-#include "Winner.h"
-
-#define MAX_LOADSTRING 100
-
-// Global Variables:
-HINSTANCE hInst;                                // current instance
-WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
-WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
-
-// Forward declarations of functions included in this code module:
-ATOM                MyRegisterClass(HINSTANCE hInstance);
-BOOL                InitInstance(HINSTANCE, int);
-LRESULT CALLBACK    WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK    About(HWND, UINT, WPARAM, LPARAM);
-
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
-                     _In_opt_ HINSTANCE hPrevInstance,
-                     _In_ LPWSTR    lpCmdLine,
-                     _In_ int       nCmdShow)
-{
-    UNREFERENCED_PARAMETER(hPrevInstance);
-    UNREFERENCED_PARAMETER(lpCmdLine);
-
-    // TODO: Place code here.
-
-    // Initialize global strings
-    LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
-    LoadStringW(hInstance, IDC_WINNER, szWindowClass, MAX_LOADSTRING);
-    MyRegisterClass(hInstance);
-
-    // Perform application initialization:
-    if (!InitInstance (hInstance, nCmdShow))
-    {
-        return FALSE;
-    }
-
-    HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_WINNER));
-
-    MSG msg;
-
-    // Main message loop:
-    while (GetMessage(&msg, nullptr, 0, 0))
-    {
-        if (!TranslateAccelerator(msg.hwnd, hAccelTable, &msg))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-    }
-
-    return (int) msg.wParam;
-}
-
-
-
-//
-//  FUNCTION: MyRegisterClass()
-//
-//  PURPOSE: Registers the window class.
-//
-ATOM MyRegisterClass(HINSTANCE hInstance)
-{
-    WNDCLASSEXW wcex;
-
-    wcex.cbSize = sizeof(WNDCLASSEX);
-
-    wcex.style          = CS_HREDRAW | CS_VREDRAW;
-    wcex.lpfnWndProc    = WndProc;
-    wcex.cbClsExtra     = 0;
-    wcex.cbWndExtra     = 0;
-    wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_WINNER));
-    wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
-    wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
-    wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_WINNER);
-    wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
-
-    return RegisterClassExW(&wcex);
-}
-
-//
-//   FUNCTION: InitInstance(HINSTANCE, int)
-//
-//   PURPOSE: Saves instance handle and creates main window
-//
-//   COMMENTS:
-//
-//        In this function, we save the instance handle in a global variable and
-//        create and display the main program window.
-//
-BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
-{
-   hInst = hInstance; // Store instance handle in our global variable
-
-   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
-
-   if (!hWnd)
-   {
-      return FALSE;
-   }
-
-   ShowWindow(hWnd, nCmdShow);
-   UpdateWindow(hWnd);
-
-   return TRUE;
-}
-
-//
-//  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
-//
-//  PURPOSE: Processes messages for the main window.
-//
-//  WM_COMMAND  - process the application menu
-//  WM_PAINT    - Paint the main window
-//  WM_DESTROY  - post a quit message and return
-//
-//
-LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    switch (message)
-    {
-    case WM_COMMAND:
-        {
-            int wmId = LOWORD(wParam);
-            // Parse the menu selections:
-            switch (wmId)
-            {
-            case IDM_ABOUT:
-                DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-                break;
-            case IDM_EXIT:
-                DestroyWindow(hWnd);
-                break;
-            default:
-                return DefWindowProc(hWnd, message, wParam, lParam);
-            }
-        }
-        break;
-    case WM_PAINT:
-        {
-            PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hWnd, &ps);
-            // TODO: Add any drawing code that uses hdc here...
-            EndPaint(hWnd, &ps);
-        }
-        break;
-    case WM_DESTROY:
-        PostQuitMessage(0);
-        break;
-    default:
-        return DefWindowProc(hWnd, message, wParam, lParam);
-    }
-    return 0;
-}
-
-// Message handler for about box.
-INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
-{
-    UNREFERENCED_PARAMETER(lParam);
-    switch (message)
-    {
-    case WM_INITDIALOG:
-        return (INT_PTR)TRUE;
-
-    case WM_COMMAND:
-        if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
-        {
-            EndDialog(hDlg, LOWORD(wParam));
-            return (INT_PTR)TRUE;
-        }
-        break;
-    }
-    return (INT_PTR)FALSE;
-}
-*/
-
-#define WIN32_LEAN_AND_MEAN
+﻿#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <shellapi.h> // For CommandLineToArgvW
 
@@ -220,6 +38,7 @@ using namespace Microsoft::WRL;
 #include "Helpers.h"
 
 // The number of swap chain back buffers.
+// this g_NumFrames value must not be less than 2 when using the flip presentation model.
 const uint8_t g_NumFrames = 3;
 // Use WARP adapter
 bool g_UseWarp = false;
@@ -236,19 +55,27 @@ RECT g_WindowRect;
 
 // DirectX 12 Objects
 ComPtr<ID3D12Device2> g_Device;
-ComPtr<ID3D12CommandQueue> g_CommandQueue;
-ComPtr<IDXGISwapChain4> g_SwapChain;
+ComPtr<ID3D12CommandQueue> g_CommandQueue; // The command queue is stored here
+ComPtr<IDXGISwapChain4> g_SwapChain; // 
 ComPtr<ID3D12Resource> g_BackBuffers[g_NumFrames];
 ComPtr<ID3D12GraphicsCommandList> g_CommandList;
 ComPtr<ID3D12CommandAllocator> g_CommandAllocators[g_NumFrames];
-ComPtr<ID3D12DescriptorHeap> g_RTVDescriptorHeap;
+ComPtr<ID3D12DescriptorHeap> g_RTVDescriptorHeap; // used to store the descriptor heap that contains the render target views for the swap chain back buffers.
+/*
+The size of a decriptor heap is vendor specific (Intel, NVidia, and AMD may store descriptors differently). 
+In order to correctly offset the index into the descriptor heap,, the size of a single element in the descriptor 
+heap needs to be queried during initialization. The size of a sinsgle RTV descriptor is stored in this variable.
+*/
 UINT g_RTVDescriptorSize;
+
+
 UINT g_CurrentBackBufferIndex;
 
 // Synchronization objects
 ComPtr<ID3D12Fence> g_Fence;
 uint64_t g_FenceValue = 0;
-uint64_t g_FrameFenceValues[g_NumFrames] = {};
+// used to keep track of the fence values that were used to signal the command queue for a particular frame
+uint64_t g_FrameFenceValues[g_NumFrames] = {}; 
 HANDLE g_FenceEvent;
 
 // By default, enable V-Sync.
@@ -418,7 +245,7 @@ ComPtr<ID3D12Device2> CreateDevice(ComPtr<IDXGIAdapter4> adapter)
 	ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&d3d12Device2)));
 	// Enable debug messages in debug mode.
 #if defined(_DEBUG)
-	ComPtr<ID3D12InfoQueue> pInfoQueue;
+	ComPtr<ID3D12InfoQueue> pInfoQueue; // used to enable break points based on the severity of the message and the ability to filter certain messages from being generated.
 	if (SUCCEEDED(d3d12Device2.As(&pInfoQueue)))
 	{
 		pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
@@ -665,8 +492,8 @@ void Update()
 
 void Render()
 {
-	auto commandAllocator = g_CommandAllocators[g_CurrentBackBufferIndex];
-	auto backBuffer = g_BackBuffers[g_CurrentBackBufferIndex];
+	ComPtr<ID3D12CommandAllocator> commandAllocator = g_CommandAllocators[g_CurrentBackBufferIndex];
+	ComPtr<ID3D12Resource> backBuffer = g_BackBuffers[g_CurrentBackBufferIndex];
 
 	commandAllocator->Reset();
 	g_CommandList->Reset(commandAllocator.Get(), nullptr);
@@ -677,7 +504,7 @@ void Render()
 			D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
 		g_CommandList->ResourceBarrier(1, &barrier);
-		FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+		FLOAT clearColor[] = { 1.0f, 0.6f, 0.9f, 1.0f };
 		CD3DX12_CPU_DESCRIPTOR_HANDLE rtv(g_RTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
 			g_CurrentBackBufferIndex, g_RTVDescriptorSize);
 
@@ -703,6 +530,7 @@ void Render()
 		g_FrameFenceValues[g_CurrentBackBufferIndex] = Signal(g_CommandQueue, g_Fence, g_FenceValue);
 		g_CurrentBackBufferIndex = g_SwapChain->GetCurrentBackBufferIndex();
 
+		// g_ComputeQueue
 		WaitForFenceValue(g_Fence, g_FrameFenceValues[g_CurrentBackBufferIndex], g_FenceEvent);
 	}
 }
@@ -852,6 +680,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 
 int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nCmdShow)
 {
+	//g_FenceEvent = CreateEventHandle();
+	//std::chrono::milliseconds duration = std::chrono::milliseconds::max();
+	//::WaitForSingleObject(g_FenceEvent, 5000);
 	// Windows 10 Creators update adds Per Monitor V2 DPI awareness context.
 	// Using this awareness context allows the client area of the window 
 	// to achieve 100% scaling while still allowing non-client window content to 
