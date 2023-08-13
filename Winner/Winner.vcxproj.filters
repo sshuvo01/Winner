@@ -98,6 +98,7 @@
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Test.hlsl" />
+    <FxCompile Include="PixelShader.hlsl" />
+    <FxCompile Include="VertexShader.hlsl" />
   </ItemGroup>
 </Project>
