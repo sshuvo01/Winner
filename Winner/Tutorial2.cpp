@@ -173,11 +173,19 @@ bool Tutorial2::LoadContent()
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
 		D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+	/*
+	ID3D12Device::CreateGraphicsPipelineState will fail if the geometry shader contains stream output but the 
+	root signature does not have this flag set. Omit this flag if stream output is not required.
+	*/
 
 	// A single 32-bit constant root parameter that is used by the vertex shader.
 	CD3DX12_ROOT_PARAMETER1 rootParameters[1];
 	rootParameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
 
+	/*
+	After describing the parameters (and samplers) that are used by the root signature, 
+	the next step is to create the the root signature description.
+	*/
 	CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
 	rootSignatureDescription.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
 
@@ -192,6 +200,11 @@ bool Tutorial2::LoadContent()
 
 	struct PipelineStateStream
 	{
+		/*
+		An example of a stream token for a Pipeline State Stream object is the 
+		Vertex Shader (VS), Geometry Shader (GS) or Pixel Shader (PS). 
+		You only need to specify stream tokens that will override the default values of that token.
+		*/
 		CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE pRootSignature;
 		CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT InputLayout;
 		CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY PrimitiveTopologyType;
@@ -218,6 +231,10 @@ bool Tutorial2::LoadContent()
 	};
 	ThrowIfFailed(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&m_PipelineState)));
 
+	/*
+	Before leaving the LoadContent method, the command list must be executed on the command queue 
+	to ensure that the index and vertex buffers are uploaded to the GPU resources before rendering.
+	*/
 	auto fenceValue = commandQueue->ExecuteCommandList(commandList);
 	commandQueue->WaitForFenceValue(fenceValue);
 
@@ -312,7 +329,7 @@ void Tutorial2::OnUpdate(UpdateEventArgs& e)
 	// Update the model matrix.
 	float angle = static_cast<float>(e.TotalTime * 90.0);
 	const XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
-	m_ModelMatrix = XMMatrixRotationAxis(rotationAxis, XMConvertToRadians(angle));
+	m_ModelMatrix = XMMatrixTranslation(2.f, 0.f, 0.f) *XMMatrixRotationAxis(rotationAxis, XMConvertToRadians(angle));
 
 	// Update the view matrix.
 	const XMVECTOR eyePosition = XMVectorSet(0, 0, -10, 1);
@@ -379,7 +396,11 @@ void Tutorial2::OnRender(RenderEventArgs& e)
 	commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 	commandList->IASetVertexBuffers(0, 1, &m_VertexBufferView);
 	commandList->IASetIndexBuffer(&m_IndexBufferView);
-
+	
+	/*
+	The viewport to render to is determined by the SV_ViewportArrayIndex semantic output by the geometry shader. 
+	If the geometry shader does not specify the semantic, the first viewport in the array is used.
+	*/
 	commandList->RSSetViewports(1, &m_Viewport);
 	commandList->RSSetScissorRects(1, &m_ScissorRect);
 
@@ -392,6 +413,11 @@ void Tutorial2::OnRender(RenderEventArgs& e)
 
 	commandList->DrawIndexedInstanced(_countof(g_Indicies), 1, 0, 0, 0);
 
+	XMMATRIX mvpMatrix2 = XMMatrixMultiply(m_ModelMatrix * XMMatrixTranslation(-2.f, 0.f, 0.f), m_ViewMatrix);
+	mvpMatrix2 = XMMatrixMultiply(mvpMatrix2, m_ProjectionMatrix);
+	commandList->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvpMatrix2, 0);
+	
+	commandList->DrawIndexedInstanced(_countof(g_Indicies), 1, 0, 0, 0);
 	// Present
 	{
 		TransitionResource(commandList, backBuffer,
