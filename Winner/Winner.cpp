@@ -12,6 +12,10 @@
 
 #include <dxgidebug.h>
 
+#include "Core.h"
+#include "UploadHelpers.h"
+#include "GoodGame.h"
+
 void ReportLiveObjects()
 {
 	IDXGIDebug1* dxgiDebug;
@@ -36,7 +40,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 	Application::Create(hInstance);
 	{
-		std::shared_ptr<Tutorial2> demo = std::make_shared<Tutorial2>(L"Learning DirectX 12 - Lesson 2", 1280, 720);
+		//std::shared_ptr<Tutorial2> demo = std::make_shared<Tutorial2>(L"Good Game", 1280, 720, false);
+		std::shared_ptr<GoodGame> demo = std::make_shared<GoodGame>(L"Good Game", 1280, 720, false);
 		retCode = Application::Get().Run(demo);
 	}
 	Application::Destroy();

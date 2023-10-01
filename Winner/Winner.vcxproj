@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -75,12 +75,20 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath); $(ProjectDir)</IncludePath>
+    <ReferencePath>$(VC_ReferencesPath_x64);$(ProjectDir)</ReferencePath>
+    <ExecutablePath>$(VC_ExecutablePath_x64);$(WindowsSDK_ExecutablePath);$(VS_ExecutablePath);$(MSBuild_ExecutablePath);$(FxCopDir);$(PATH);$(ProjectDir)</ExecutablePath>
+    <LibraryPath>$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64);$(NETFXKitsDir)Lib\um\x64;$(ProjectDir)</LibraryPath>
+    <LibraryWPath>$(WindowsSDK_MetadataPath);$(ProjectDir)</LibraryWPath>
+    <SourcePath>$(VC_SourcePath);$(ProjectDir)</SourcePath>
+    <IntDir />
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <IntDir />
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -105,8 +113,9 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);RESOURCEDIR=R"($(ProjectDir)Resources\)"</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -157,26 +166,36 @@
   <ItemGroup>
     <ClInclude Include="Application.h" />
     <ClInclude Include="CommandQueue.h" />
+    <ClInclude Include="Core.h" />
     <ClInclude Include="d3dx12.h" />
     <ClInclude Include="DX12LibPCH.h" />
     <ClInclude Include="Events.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="Game.h" />
+    <ClInclude Include="GoodGame.h" />
     <ClInclude Include="Helpers.h" />
     <ClInclude Include="HighResolutionClock.h" />
     <ClInclude Include="KeyCodes.h" />
+    <ClInclude Include="Mesh.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="Shader.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Tutorial2.h" />
+    <ClInclude Include="UploadHelpers.h" />
     <ClInclude Include="Window.h" />
     <ClInclude Include="Winner.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="CommandQueue.cpp" />
+    <ClCompile Include="Core.cpp" />
     <ClCompile Include="Game.cpp" />
+    <ClCompile Include="GoodGame.cpp" />
     <ClCompile Include="HighResolutionClock.cpp" />
+    <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="Shader.cpp" />
     <ClCompile Include="Tutorial2.cpp" />
+    <ClCompile Include="UploadHelpers.cpp" />
     <ClCompile Include="Window.cpp" />
     <ClCompile Include="Winner.cpp" />
   </ItemGroup>

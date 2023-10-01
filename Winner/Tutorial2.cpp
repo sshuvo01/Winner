@@ -235,7 +235,7 @@ bool Tutorial2::LoadContent()
 	Before leaving the LoadContent method, the command list must be executed on the command queue 
 	to ensure that the index and vertex buffers are uploaded to the GPU resources before rendering.
 	*/
-	auto fenceValue = commandQueue->ExecuteCommandList(commandList);
+	uint64_t fenceValue = commandQueue->ExecuteCommandList(commandList);
 	commandQueue->WaitForFenceValue(fenceValue);
 
 	m_ContentLoaded = true;
@@ -375,9 +375,9 @@ void Tutorial2::OnRender(RenderEventArgs& e)
 	auto commandList = commandQueue->GetCommandList();
 
 	UINT currentBackBufferIndex = m_pWindow->GetCurrentBackBufferIndex();
-	auto backBuffer = m_pWindow->GetCurrentBackBuffer();
-	auto rtv = m_pWindow->GetCurrentRenderTargetView();
-	auto dsv = m_DSVHeap->GetCPUDescriptorHandleForHeapStart();
+	Microsoft::WRL::ComPtr<ID3D12Resource> backBuffer = m_pWindow->GetCurrentBackBuffer();
+	D3D12_CPU_DESCRIPTOR_HANDLE rtv = m_pWindow->GetCurrentRenderTargetView();
+	D3D12_CPU_DESCRIPTOR_HANDLE dsv = m_DSVHeap->GetCPUDescriptorHandleForHeapStart();
 
 	// Clear the render targets.
 	{
@@ -413,11 +413,6 @@ void Tutorial2::OnRender(RenderEventArgs& e)
 
 	commandList->DrawIndexedInstanced(_countof(g_Indicies), 1, 0, 0, 0);
 
-	XMMATRIX mvpMatrix2 = XMMatrixMultiply(m_ModelMatrix * XMMatrixTranslation(-2.f, 0.f, 0.f), m_ViewMatrix);
-	mvpMatrix2 = XMMatrixMultiply(mvpMatrix2, m_ProjectionMatrix);
-	commandList->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvpMatrix2, 0);
-	
-	commandList->DrawIndexedInstanced(_countof(g_Indicies), 1, 0, 0, 0);
 	// Present
 	{
 		TransitionResource(commandList, backBuffer,

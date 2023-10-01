@@ -1,3 +1,5 @@
+/*
+*/
 struct PixelShaderInput
 {
 	float4 Color    : COLOR;

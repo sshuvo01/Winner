@@ -20,7 +20,7 @@ class Window
 {
 public:
 	// Number of swapchain back buffers.
-	static const UINT BufferCount = 3;
+	static const UINT BufferCount = 2;
 
 	/**
 	* Get a handle to this window's instance.
