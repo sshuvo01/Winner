@@ -5,6 +5,8 @@
 #include "CommandQueue.h"
 #include "Window.h"
 
+
+#include <DirectXTex/DirectXTex/DirectXTex.h>
 #include <d3dcompiler.h>
 
 #include <DirectXColors.h>
@@ -27,11 +29,23 @@ GoodGame::GoodGame(const std::wstring & Name, int Width, int Height, bool VSync)
 
 bool GoodGame::LoadContent()
 {
+	/*
+	DirectX::TexMetadata Metadata;
+	DirectX::ScratchImage ScratchImage;
+
+	DirectX::LoadFromDDSFile(L"", 0, &Metadata, ScratchImage);
+	*/
+	BoxTexture = std::make_unique<Texture>();
+	//MehTexture->Load(L"", )
+
 	if (!bLoadedContent)
 	{
 		std::shared_ptr<CommandQueue> CommandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		WRLComPtr<ID3D12GraphicsCommandList2> CommandList = CommandQueue->GetCommandList();
-		
+		Microsoft::WRL::ComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
+
+		BoxTexture->Load(ResourceDirectory<std::wstring>::GetPath() + L"Textures\\Directx9.png", Device.Get(), CommandList.Get());
+
 		BuildDescriptorHeaps(CommandList.Get());
 		BuildConstantBuffers(CommandList.Get());
 		BuildRootSignature(CommandList.Get());
@@ -133,6 +147,10 @@ void GoodGame::OnRender(RenderEventArgs & e)
 	ID3D12DescriptorHeap* descriptorHeaps[] = { ConstantBufferHeap.Get() };
 	CommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 	CommandList->SetGraphicsRootDescriptorTable(0, ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
+	
+	ID3D12DescriptorHeap* descriptorHeaps2[] = { SrvDescriptorHeap.Get() };
+	CommandList->SetDescriptorHeaps(_countof(descriptorHeaps2), descriptorHeaps2);
+	CommandList->SetGraphicsRootDescriptorTable(1, SrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
 
 	const UINT YoIndexCount = BoxGeometry->DrawArgs["box"].IndexCount;
 	
@@ -191,6 +209,28 @@ void GoodGame::BuildDescriptorHeaps(ID3D12GraphicsCommandList2* CommandList)
 
 	ThrowIfFailed(Device->CreateDescriptorHeap(&CbvHeapDesc,
 		IID_PPV_ARGS(&ConstantBufferHeap)) );
+
+	// Shader resource view...
+	D3D12_DESCRIPTOR_HEAP_DESC SrvHeapDesc = {};
+	SrvHeapDesc.NumDescriptors = 1;
+	SrvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	SrvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	ThrowIfFailed(Device->CreateDescriptorHeap(&SrvHeapDesc, IID_PPV_ARGS(SrvDescriptorHeap.GetAddressOf())));
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE TexDescriptor(SrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+
+	//std::unique_ptr<Texture>& Stonk = mTextures["woodCrateTex"];
+	ID3D12Resource* woodCrateTex = BoxTexture->GetDefaultBuffer(); //mTextures["woodCrateTex"]->Resource;
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC SrvDesc = {};
+	SrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	SrvDesc.Format = woodCrateTex->GetDesc().Format;
+	SrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	SrvDesc.Texture2D.MostDetailedMip = 0;
+	SrvDesc.Texture2D.MipLevels = BoxTexture->GetAvailableMipLevels();//1;// woodCrateTex->GetDesc().MipLevels;
+	SrvDesc.Texture2D.ResourceMinLODClamp = 0;
+
+	Device->CreateShaderResourceView(woodCrateTex, &SrvDesc, TexDescriptor);
 }
 
 void GoodGame::BuildConstantBuffers(ID3D12GraphicsCommandList2* CommandList)
@@ -207,14 +247,26 @@ void GoodGame::BuildConstantBuffers(ID3D12GraphicsCommandList2* CommandList)
 
 void GoodGame::BuildRootSignature(ID3D12GraphicsCommandList2* CommandList)
 {
-	CD3DX12_ROOT_PARAMETER RootParameter[1];
+	CD3DX12_ROOT_PARAMETER RootParameter[2];
 
 	// Create a single descriptor table of CBVs
 	CD3DX12_DESCRIPTOR_RANGE CbvTable;
 	CbvTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, 1, 0);
 	RootParameter[0].InitAsDescriptorTable(1, &CbvTable);
-
-	CD3DX12_ROOT_SIGNATURE_DESC RootSigDesc(1, RootParameter, 0, nullptr, D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+	
+	CD3DX12_DESCRIPTOR_RANGE TexTable;
+	TexTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+	RootParameter[1].InitAsDescriptorTable(1, &TexTable, D3D12_SHADER_VISIBILITY_PIXEL);
+	/*
+		UINT numParameters,
+        _In_reads_opt_(numParameters) const D3D12_ROOT_PARAMETER* _pParameters,
+        UINT numStaticSamplers = 0,
+        _In_reads_opt_(numStaticSamplers) const D3D12_STATIC_SAMPLER_DESC* _pStaticSamplers = NULL,
+        D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE)
+	*/
+	auto StaticSamp = GetStaticSamplers();
+	CD3DX12_ROOT_SIGNATURE_DESC RootSigDesc(2, RootParameter, 
+		StaticSamp.size(), StaticSamp.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
 	WRLComPtr<ID3DBlob> SerializedRootSig = nullptr;
 	WRLComPtr<ID3DBlob> ErrorBlob = nullptr;
@@ -247,7 +299,8 @@ void GoodGame::BuildShadersAndInputLayout(ID3D12GraphicsCommandList2* CommandLis
 	InputLayout =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "TEX", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12 + 4 * 4, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 }
 
@@ -255,47 +308,89 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 {
 	using namespace DirectX;
 	using namespace std;
-	array<Vertex, 8> Vertices =
+	float w2 = 1;
+	float h2 = 1;
+	float d2 = 1;
+	array<Vertex, 24> Vertices =
 	{
-		Vertex({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::White) }),
-		Vertex({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Black) }),
-		Vertex({ XMFLOAT3(+1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Red) }),
-		Vertex({ XMFLOAT3(+1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Green) }),
-		Vertex({ XMFLOAT3(-1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Blue) }),
-		Vertex({ XMFLOAT3(-1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Yellow) }),
-		Vertex({ XMFLOAT3(+1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Cyan) }),
-		Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta) })
+		/*
+		Vertex({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::White), XMFLOAT2(0.f, 1.f) }),
+		Vertex({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Black), XMFLOAT2(0.f, 0.f) }),
+		Vertex({ XMFLOAT3(+1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Red), XMFLOAT2(1.f, 0.f) }),
+		Vertex({ XMFLOAT3(+1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Green), XMFLOAT2(1.f, 1.f) }),
+
+		Vertex({ XMFLOAT3(-1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Blue), XMFLOAT2(0.f, 1.f) }), 
+		Vertex({ XMFLOAT3(-1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Yellow), XMFLOAT2(0.f, 0.f) }),
+		Vertex({ XMFLOAT3(+1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Cyan), XMFLOAT2(1.f, 0.f) }),
+		Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta), XMFLOAT2(1.f, 1.f) })
+		*/
+		// Fill in the front face vertex data.
+		Vertex( -w2, -h2, -d2, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f),
+	Vertex(-w2, +h2, -d2, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f),
+	Vertex(+w2, +h2, -d2, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f),
+	Vertex(+w2, -h2, -d2,  1.0f, 0.0f, 0.0f, 1.0f, 1.0f),
+
+	// Fill in the back face vertex data.
+	Vertex(-w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f),
+	Vertex(+w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f),
+	Vertex(+w2, +h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f),
+	Vertex(-w2, +h2, +d2, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f),
+
+	// Fill in the top face vertex data.
+	Vertex(-w2, +h2, -d2, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f),
+	Vertex(-w2, +h2, +d2, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f),
+	Vertex(+w2, +h2, +d2, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f),
+	Vertex(+w2, +h2, -d2, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f),
+
+	// Fill in the bottom face vertex data.
+	Vertex(-w2, -h2, -d2, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f),
+	Vertex(+w2, -h2, -d2, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f),
+	Vertex(+w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f),
+	Vertex(-w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f),
+
+	// Fill in the left face vertex data.
+	Vertex(-w2, -h2, +d2, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f),
+	Vertex(-w2, +h2, +d2, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f),
+	Vertex(-w2, +h2, -d2, 0.0f, 0.0f, -1.0f, 1.0f, 0.0f),
+	Vertex(-w2, -h2, -d2, 0.0f, 0.0f, -1.0f, 1.0f, 1.0f),
+
+	// Fill in the right face vertex data.
+	Vertex(+w2, -h2, -d2, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f),
+	Vertex(+w2, +h2, -d2, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f),
+	Vertex(+w2, +h2, +d2, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f),
+	Vertex(+w2, -h2, +d2, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f)
 	};
 
-	array<uint16_t, 36> Indices =
-	{
-		// front face
-		0, 1, 2,
-		0, 2, 3,
+	
 
-		// back face
-		4, 6, 5,
-		4, 7, 6,
+	uint16_t i[36];
 
-		// left face
-		4, 5, 1,
-		4, 1, 0,
+	// Fill in the front face index data
+	i[0] = 0; i[1] = 1; i[2] = 2;
+	i[3] = 0; i[4] = 2; i[5] = 3;
 
-		// right face
-		3, 2, 6,
-		3, 6, 7,
+	// Fill in the back face index data
+	i[6] = 4; i[7] = 5; i[8] = 6;
+	i[9] = 4; i[10] = 6; i[11] = 7;
 
-		// top face
-		1, 5, 6,
-		1, 6, 2,
+	// Fill in the top face index data
+	i[12] = 8; i[13] = 9; i[14] = 10;
+	i[15] = 8; i[16] = 10; i[17] = 11;
 
-		// bottom face
-		4, 0, 3,
-		4, 3, 7
-	};
+	// Fill in the bottom face index data
+	i[18] = 12; i[19] = 13; i[20] = 14;
+	i[21] = 12; i[22] = 14; i[23] = 15;
+
+	// Fill in the left face index data
+	i[24] = 16; i[25] = 17; i[26] = 18;
+	i[27] = 16; i[28] = 18; i[29] = 19;
+
+	// Fill in the right face index data
+	i[30] = 20; i[31] = 21; i[32] = 22;
+	i[33] = 20; i[34] = 22; i[35] = 23;
 
 	const UINT VertexBufferSize = Vertices.size() * sizeof(Vertex);
-	const UINT IndexBufferSize = Indices.size() * sizeof(std::uint16_t);
+	const UINT IndexBufferSize = 36 * sizeof(std::uint16_t);
 
 	BoxGeometry = std::make_unique<MeshGeometry>();
 	BoxGeometry->Name = "boxGeometry";
@@ -304,7 +399,7 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 	CopyMemory(BoxGeometry->VertexBufferCPU->GetBufferPointer(), Vertices.data(), VertexBufferSize);
 
 	ThrowIfFailed(D3DCreateBlob(IndexBufferSize, &BoxGeometry->IndexBufferCPU));
-	CopyMemory(BoxGeometry->IndexBufferCPU->GetBufferPointer(), Indices.data(), IndexBufferSize);
+	CopyMemory(BoxGeometry->IndexBufferCPU->GetBufferPointer(), i, IndexBufferSize);
 
 	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
 	//std::shared_ptr<CommandQueue> CommandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -314,7 +409,7 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 	BoxGeometry->VertexBufferUploader->CreateAndUpload(Device.Get(), CommandList, Vertices.data(), VertexBufferSize);
 
 	BoxGeometry->IndexBufferUploader = make_unique<DefaultBufferUploader>();
-	BoxGeometry->IndexBufferUploader->CreateAndUpload(Device.Get(), CommandList, Indices.data(), IndexBufferSize);
+	BoxGeometry->IndexBufferUploader->CreateAndUpload(Device.Get(), CommandList, i, IndexBufferSize);
 	
 	BoxGeometry->VertexByteStride = sizeof(Vertex);
 	BoxGeometry->VertexBufferByteSize = VertexBufferSize;
@@ -322,7 +417,7 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 	BoxGeometry->IndexBufferByteSize = IndexBufferSize;
 	
 	SubmeshGeometry Submesh;
-	Submesh.IndexCount = static_cast<UINT>(Indices.size());
+	Submesh.IndexCount = static_cast<UINT>(36);
 	Submesh.StartIndexLocation = 0;
 	Submesh.BaseVertexLocation = 0;
 
@@ -360,6 +455,63 @@ void GoodGame::BuildPSO(ID3D12GraphicsCommandList2* CommandList)
 
 	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
 	ThrowIfFailed(Device->CreateGraphicsPipelineState(&PSODesc, IID_PPV_ARGS(&PSO)));
+}
+
+std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GoodGame::GetStaticSamplers()
+{
+	// Applications usually only need a handful of samplers.  So just define them all up front
+	// and keep them available as part of the root signature.  
+
+	const CD3DX12_STATIC_SAMPLER_DESC pointWrap(
+		0, // shaderRegister
+		D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
+
+	const CD3DX12_STATIC_SAMPLER_DESC pointClamp(
+		1, // shaderRegister
+		D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
+
+	const CD3DX12_STATIC_SAMPLER_DESC linearWrap(
+		2, // shaderRegister
+		D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
+
+	const CD3DX12_STATIC_SAMPLER_DESC linearClamp(
+		3, // shaderRegister
+		D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
+
+	const CD3DX12_STATIC_SAMPLER_DESC anisotropicWrap(
+		4, // shaderRegister
+		D3D12_FILTER_ANISOTROPIC, // filter
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
+		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressW
+		0.0f,                             // mipLODBias
+		8);                               // maxAnisotropy
+
+	const CD3DX12_STATIC_SAMPLER_DESC anisotropicClamp(
+		5, // shaderRegister
+		D3D12_FILTER_ANISOTROPIC, // filter
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
+		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressW
+		0.0f,                              // mipLODBias
+		8);                                // maxAnisotropy
+
+	return {
+		pointWrap, pointClamp,
+		linearWrap, linearClamp,
+		anisotropicWrap, anisotropicClamp };
 }
 
 void GoodGame::ResizeDepthBuffer(int Width, int Height)

@@ -8,11 +8,22 @@
 #include "Mesh.h"
 #include "Window.h"
 #include "UploadHelpers.h"
+#include "Texture.h"
 
 struct Vertex
 {
+	Vertex(float p1, float p2, float p3,
+		float c1, float c2, float c3,
+		float u, float v)
+	{
+		Position = DirectX::XMFLOAT3(p1, p2, p3);
+		Color = DirectX::XMFLOAT4(c1, c2, c3, 1.f);
+		Tex = DirectX::XMFLOAT2(u, v);
+	}
+
 	DirectX::XMFLOAT3 Position;
 	DirectX::XMFLOAT4 Color;
+	DirectX::XMFLOAT2 Tex;
 };
 
 struct ObjectConstants
@@ -76,9 +87,9 @@ private:
 	void BuildShadersAndInputLayout(ID3D12GraphicsCommandList2* CommandList);
 	void BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList);
 	void BuildPSO(ID3D12GraphicsCommandList2* CommandList);
+	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
 
 	WRLComPtr<ID3D12RootSignature> RootSignature;
-	WRLComPtr<ID3D12DescriptorHeap> ConstantBufferHeap;
 	WRLComPtr<ID3D12PipelineState> PSO;
 	std::unique_ptr < BufferUploader<ObjectConstants, 1, true> > ObjectConstantBuffer;
 	std::unique_ptr< Shader > VertexShader, PixelShader;
@@ -92,7 +103,10 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_DepthBuffer;
 	// Descriptor heap for depth buffer.
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
+	WRLComPtr<ID3D12DescriptorHeap> ConstantBufferHeap;
+	WRLComPtr<ID3D12DescriptorHeap> SrvDescriptorHeap;
 
 	uint64_t m_FenceValues[Window::BufferCount] = {};
+	std::unique_ptr<Texture> BoxTexture;
 };
 

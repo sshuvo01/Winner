@@ -5,6 +5,7 @@
 #include <wrl/client.h>
 #include <cassert>
 #include <DirectXMath.h>
+#include <vector>
 
 #include "d3dx12.h"
 #include "Helpers.h"

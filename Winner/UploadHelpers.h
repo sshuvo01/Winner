@@ -8,7 +8,10 @@ public:
 	DefaultBufferUploader() { }
 	~DefaultBufferUploader() { }
 
+	// TODO: organize these!
 	void CreateAndUpload(ID3D12Device* Device, ID3D12GraphicsCommandList2* CmdList, const void* BufferData, UINT64 ByteSize);
+	void CreateAndUpload(ID3D12Device* Device, ID3D12GraphicsCommandList2* CmdList, const D3D12_RESOURCE_DESC* ResourceDesc, 
+		UINT32 FirstSubresource, UINT32 NumSubresources, D3D12_SUBRESOURCE_DATA* SubresourceData);
 	
 	FORCEINLINE ID3D12Resource* GetDefaultBuffer() const { assert(DefaultBuffer); return DefaultBuffer.Get(); }
 	FORCEINLINE ID3D12Resource* GetUploadBuffer() const { assert(UploadBuffer); return UploadBuffer.Get(); }
