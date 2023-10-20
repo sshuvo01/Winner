@@ -9,6 +9,7 @@ inline void ThrowIfFailed(HRESULT hr)
 {
 	if (FAILED(hr))
 	{
+		__debugbreak();
 		throw std::exception();
 	}
 }

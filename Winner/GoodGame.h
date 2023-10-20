@@ -14,20 +14,26 @@ struct Vertex
 {
 	Vertex(float p1, float p2, float p3,
 		float c1, float c2, float c3,
+		float n1, float n2, float n3,
 		float u, float v)
 	{
 		Position = DirectX::XMFLOAT3(p1, p2, p3);
 		Color = DirectX::XMFLOAT4(c1, c2, c3, 1.f);
 		Tex = DirectX::XMFLOAT2(u, v);
+		Normal = DirectX::XMFLOAT3(n1, n2, n3);
 	}
 
 	DirectX::XMFLOAT3 Position;
 	DirectX::XMFLOAT4 Color;
+	DirectX::XMFLOAT3 Normal;
 	DirectX::XMFLOAT2 Tex;
 };
 
+//#pragma pack 4 
 struct ObjectConstants
 {
+	DirectX::XMFLOAT3 LightDir; float Padding;
+	DirectX::XMFLOAT4X4 World = Useful::Identity4x4();
 	DirectX::XMFLOAT4X4 WorldViewProj = Useful::Identity4x4();
 };
 
@@ -91,7 +97,7 @@ private:
 
 	WRLComPtr<ID3D12RootSignature> RootSignature;
 	WRLComPtr<ID3D12PipelineState> PSO;
-	std::unique_ptr < BufferUploader<ObjectConstants, 1, true> > ObjectConstantBuffer;
+	std::unique_ptr < BufferUploader<ObjectConstants, 2, true> > ObjectConstantBuffer;
 	std::unique_ptr< Shader > VertexShader, PixelShader;
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> InputLayout;

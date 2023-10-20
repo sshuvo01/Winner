@@ -92,6 +92,9 @@ void GoodGame::OnUpdate(UpdateEventArgs & e)
 	XMStoreFloat4x4(&ViewMat, view);
 
 	XMMATRIX world = XMLoadFloat4x4(&WorldMat);
+	//world = XMMatrixRotationX(e.TotalTime) * XMMatrixTranslation(std::sin(e.TotalTime), 0.f, std::sin(e.TotalTime));
+	world = XMMatrixRotationX(e.TotalTime) * XMMatrixRotationY(std::sin(e.TotalTime))
+		* XMMatrixRotationZ(std::cos(e.TotalTime));// *XMMatrixTranslation(std::sin(e.TotalTime), 0.f, std::sin(e.TotalTime));
 	XMMATRIX proj = XMLoadFloat4x4(&ProjectionMat);
 
 	XMMATRIX worldViewProj = world * view * proj;
@@ -99,7 +102,19 @@ void GoodGame::OnUpdate(UpdateEventArgs & e)
 	// Update the constant buffer with the latest worldViewProj matrix.
 	ObjectConstants objConstants;
 	XMStoreFloat4x4(&objConstants.WorldViewProj, XMMatrixTranspose(worldViewProj));
+	XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
+	objConstants.LightDir = {  10.0f, 15.707f, 5.707f };
 	ObjectConstantBuffer->CopyData(&objConstants, 0);
+
+	ObjectConstants objConstants2 = objConstants;
+	XMMATRIX world2 = XMMatrixTranslation(0.f, 2.f, 0.f);
+	XMMATRIX worldViewProj2 = world2 * view * proj;
+
+	XMStoreFloat4x4(&objConstants2.WorldViewProj, XMMatrixTranspose(worldViewProj2));
+	XMStoreFloat4x4(&objConstants2.World, XMMatrixTranspose(world2));
+
+	//world = XMMatrixRotationX(e.TotalTime) * XMMatrixTranslation(std::sin(e.TotalTime), 0.f, std::sin(e.TotalTime));
+	ObjectConstantBuffer->CopyData(&objConstants2, 1);
 }
 
 void GoodGame::OnRender(RenderEventArgs & e)
@@ -156,6 +171,13 @@ void GoodGame::OnRender(RenderEventArgs & e)
 	
 	CommandList->DrawIndexedInstanced(YoIndexCount, 1, 0, 0, 0);
 
+	//
+	CommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
+	CD3DX12_GPU_DESCRIPTOR_HANDLE Handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
+	Handle.Offset(1, Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+	CommandList->SetGraphicsRootDescriptorTable(0, Handle);
+
+	CommandList->DrawIndexedInstanced(YoIndexCount, 1, 0, 0, 0);
 	// Present
 	{
 		CD3DX12_RESOURCE_BARRIER Yobarrier = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(), 
@@ -200,7 +222,7 @@ void GoodGame::OnResize(ResizeEventArgs & e)
 void GoodGame::BuildDescriptorHeaps(ID3D12GraphicsCommandList2* CommandList)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC CbvHeapDesc;
-	CbvHeapDesc.NumDescriptors = 1;
+	CbvHeapDesc.NumDescriptors = 2;
 	CbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	CbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	CbvHeapDesc.NodeMask = 0;
@@ -236,13 +258,24 @@ void GoodGame::BuildDescriptorHeaps(ID3D12GraphicsCommandList2* CommandList)
 void GoodGame::BuildConstantBuffers(ID3D12GraphicsCommandList2* CommandList)
 {
 	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
-	ObjectConstantBuffer = std::make_unique< BufferUploader<ObjectConstants, 1, true>>(Device.Get());
+	ObjectConstantBuffer = std::make_unique< BufferUploader<ObjectConstants, 2, true>>(Device.Get());
 	
 	D3D12_CONSTANT_BUFFER_VIEW_DESC BufferDesc;
 	BufferDesc.BufferLocation = ObjectConstantBuffer->GetBuffer()->GetGPUVirtualAddress();
 	BufferDesc.SizeInBytes = ObjectConstantBuffer->GetElementSize();
 
 	Device->CreateConstantBufferView(&BufferDesc, ConstantBufferHeap->GetCPUDescriptorHandleForHeapStart());
+	
+	// Another one
+	CD3DX12_CPU_DESCRIPTOR_HANDLE Handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetCPUDescriptorHandleForHeapStart());
+	UINT IncSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	Handle.Offset(1, IncSize);
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC BufferDesc2;
+	BufferDesc2.BufferLocation = ObjectConstantBuffer->GetBuffer()->GetGPUVirtualAddress() + ObjectConstantBuffer->GetElementSize();
+	BufferDesc2.SizeInBytes = ObjectConstantBuffer->GetElementSize();
+
+	Device->CreateConstantBufferView(&BufferDesc2, Handle);
 }
 
 void GoodGame::BuildRootSignature(ID3D12GraphicsCommandList2* CommandList)
@@ -296,11 +329,22 @@ void GoodGame::BuildShadersAndInputLayout(ID3D12GraphicsCommandList2* CommandLis
 	PixelShader = std::make_unique<Shader>(ResourceDirectory<std::wstring>::GetPath() + L"Shaders\\Meh.hlsl", 
 		nullptr, "PixelMain", "ps_5_0");
 
+	/*
+	LPCSTR SemanticName;
+    UINT SemanticIndex;
+    DXGI_FORMAT Format;
+    UINT InputSlot;
+    UINT AlignedByteOffset;
+    D3D12_INPUT_CLASSIFICATION InputSlotClass;
+    UINT InstanceDataStepRate;
+	*/
+
 	InputLayout =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		{ "TEX", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12 + 4 * 4, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 3 * 4, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, (3 + 4) * 4, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0  },
+		{ "TEX", 0, DXGI_FORMAT_R32G32_FLOAT, 0, (3 + 4 + 3) * 4, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 }
 
@@ -325,40 +369,40 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 		Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta), XMFLOAT2(1.f, 1.f) })
 		*/
 		// Fill in the front face vertex data.
-		Vertex( -w2, -h2, -d2, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f),
-	Vertex(-w2, +h2, -d2, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f),
-	Vertex(+w2, +h2, -d2, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f),
-	Vertex(+w2, -h2, -d2,  1.0f, 0.0f, 0.0f, 1.0f, 1.0f),
+	Vertex(-w2, -h2, -d2, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f,    0.0f, 1.0f),
+	Vertex(-w2, +h2, -d2, 1.0f, 0.0f, 0.0f,  0.0f, 0.0f, -1.0f,    0.0f, 0.0f),
+	Vertex(+w2, +h2, -d2, 1.0f, 0.0f, 0.0f,   0.0f, 0.0f, -1.0f,   1.0f, 0.0f),
+	Vertex(+w2, -h2, -d2, 1.0f, 0.0f, 0.0f,  0.0f, 0.0f, -1.0f,   1.0f, 1.0f),
 
 	// Fill in the back face vertex data.
-	Vertex(-w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f),
-	Vertex(+w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f),
-	Vertex(+w2, +h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f),
-	Vertex(-w2, +h2, +d2, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f),
+	Vertex(-w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,  1.0f, 1.0f),
+	Vertex(+w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,  0.0f, 1.0f),
+	Vertex(+w2, +h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,  0.0f, 0.0f),
+	Vertex(-w2, +h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,  1.0f, 0.0f),
 
 	// Fill in the top face vertex data.
-	Vertex(-w2, +h2, -d2, 1.0f, 0.0f, 0.0f, 0.0f, 1.0f),
-	Vertex(-w2, +h2, +d2, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f),
-	Vertex(+w2, +h2, +d2, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f),
-	Vertex(+w2, +h2, -d2, 1.0f, 0.0f, 0.0f, 1.0f, 1.0f),
+	Vertex(-w2, +h2, -d2, 1.0f, 0.0f, 0.0f,  0.0f, 1.0f, 0.0f,    0.0f, 1.0f),
+	Vertex(-w2, +h2, +d2, 1.0f, 0.0f, 0.0f,  0.0f, 1.0f, 0.0f,    0.0f, 0.0f),
+	Vertex(+w2, +h2, +d2, 1.0f, 0.0f, 0.0f,  0.0f, 1.0f, 0.0f,    1.0f, 0.0f),
+	Vertex(+w2, +h2, -d2, 1.0f, 0.0f, 0.0f,  0.0f, 1.0f, 0.0f,    1.0f, 1.0f),
 
 	// Fill in the bottom face vertex data.
-	Vertex(-w2, -h2, -d2, -1.0f, 0.0f, 0.0f, 1.0f, 1.0f),
-	Vertex(+w2, -h2, -d2, -1.0f, 0.0f, 0.0f, 0.0f, 1.0f),
-	Vertex(+w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f),
-	Vertex(-w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 1.0f, 0.0f),
+	Vertex(-w2, -h2, -d2, -1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f,  1.0f, 1.0f),
+	Vertex(+w2, -h2, -d2, -1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 1.0f),
+	Vertex(+w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f),
+	Vertex(-w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f),
 
 	// Fill in the left face vertex data.
-	Vertex(-w2, -h2, +d2, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f),
-	Vertex(-w2, +h2, +d2, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f),
-	Vertex(-w2, +h2, -d2, 0.0f, 0.0f, -1.0f, 1.0f, 0.0f),
-	Vertex(-w2, -h2, -d2, 0.0f, 0.0f, -1.0f, 1.0f, 1.0f),
+	Vertex(-w2, -h2, +d2, 0.0f, 0.0f, -1.0f,  -1.0f, 0.0f, 0.0f,  0.0f, 1.0f),
+	Vertex(-w2, +h2, +d2, 0.0f, 0.0f, -1.0f,  -1.0f, 0.0f, 0.0f,  0.0f, 0.0f),
+	Vertex(-w2, +h2, -d2, 0.0f, 0.0f, -1.0f, -1.0f, 0.0f, 0.0f,   1.0f, 0.0f),
+	Vertex(-w2, -h2, -d2, 0.0f, 0.0f, -1.0f,  -1.0f, 0.0f, 0.0f,  1.0f, 1.0f),
 
 	// Fill in the right face vertex data.
-	Vertex(+w2, -h2, -d2, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f),
-	Vertex(+w2, +h2, -d2, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f),
-	Vertex(+w2, +h2, +d2, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f),
-	Vertex(+w2, -h2, +d2, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f)
+	Vertex(+w2, -h2, -d2, 0.0f, 0.0f, 1.0f,  1.0f, 0.0f, 0.0f,  0.0f, 1.0f),
+	Vertex(+w2, +h2, -d2, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f,  0.0f, 0.0f),
+	Vertex(+w2, +h2, +d2, 0.0f, 0.0f, 1.0f,  1.0f, 0.0f, 0.0f, 1.0f, 0.0f),
+	Vertex(+w2, -h2, +d2, 0.0f, 0.0f, 1.0f,  1.0f, 0.0f, 0.0f, 1.0f, 1.0f)
 	};
 
 	
@@ -388,7 +432,7 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 	// Fill in the right face index data
 	i[30] = 20; i[31] = 21; i[32] = 22;
 	i[33] = 20; i[34] = 22; i[35] = 23;
-
+	
 	const UINT VertexBufferSize = Vertices.size() * sizeof(Vertex);
 	const UINT IndexBufferSize = 36 * sizeof(std::uint16_t);
 
@@ -396,10 +440,10 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 	BoxGeometry->Name = "boxGeometry";
 
 	ThrowIfFailed(D3DCreateBlob(VertexBufferSize, &BoxGeometry->VertexBufferCPU));
-	CopyMemory(BoxGeometry->VertexBufferCPU->GetBufferPointer(), Vertices.data(), VertexBufferSize);
+	::memcpy(BoxGeometry->VertexBufferCPU->GetBufferPointer(), Vertices.data(), VertexBufferSize);
 
 	ThrowIfFailed(D3DCreateBlob(IndexBufferSize, &BoxGeometry->IndexBufferCPU));
-	CopyMemory(BoxGeometry->IndexBufferCPU->GetBufferPointer(), i, IndexBufferSize);
+	::memcpy(BoxGeometry->IndexBufferCPU->GetBufferPointer(), i, IndexBufferSize);
 
 	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
 	//std::shared_ptr<CommandQueue> CommandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);

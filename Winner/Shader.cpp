@@ -16,6 +16,7 @@ Shader::Shader(const std::wstring & Filename, const D3D_SHADER_MACRO * Defines, 
 	if (Errors != nullptr)
 	{
 		OutputDebugStringA(static_cast<CHAR*>(Errors->GetBufferPointer()));
+		__debugbreak();
 		ASSERTNOENTRY("No!");
 	}
 
