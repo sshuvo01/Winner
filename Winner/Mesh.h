@@ -13,7 +13,6 @@ struct SubmeshGeometry
 	INT BaseVertexLocation = 0;
 };
 
-
 class MeshGeometry : public NonCopyable
 {
 public:
@@ -40,3 +39,69 @@ public:
 	D3D12_INDEX_BUFFER_VIEW GetIndexBufferView() const;
 };
 
+class MeshData
+{
+public:
+	using VerticesType = std::vector<float>;
+	using IndicesType = std::vector<UINT16>;
+	enum class DataLayout
+	{
+		Pos3Col3Nor3Tex2,
+		Pos3Col4Nor3Tex2,
+		Pos3Nor3Tex2,
+		Unknown
+	};
+
+	FORCEINLINE const VerticesType* GetVertices() const
+	{
+		return &Vertices;
+	}
+
+	FORCEINLINE const IndicesType* GetIndices() const
+	{
+		return &Indices;
+	}
+	
+	FORCEINLINE UINT64 GetVerticesByteSize() const
+	{
+		return GetVertices()->size() * sizeof(VerticesType::value_type);
+	}
+
+	FORCEINLINE UINT64 GetIndicesByteSize() const
+	{
+		return GetIndices()->size() * sizeof(IndicesType::value_type);
+	}
+
+	FORCEINLINE DataLayout GetLayout() const
+	{
+		return Layout;
+	}
+
+	virtual ~MeshData() { }
+	virtual UINT64 GetVertexByteStride() const = 0;
+
+protected:
+	VerticesType Vertices;
+	IndicesType Indices;
+	DataLayout Layout = DataLayout::Unknown;
+
+	MeshData() {}
+};
+
+class BoxMeshData final : public MeshData
+{
+public:
+	BoxMeshData();
+	~BoxMeshData();
+
+	virtual UINT64 GetVertexByteStride() const override;
+};
+
+class PlaneMeshData final : public MeshData
+{
+public:
+	PlaneMeshData();
+	~PlaneMeshData();
+
+	virtual UINT64 GetVertexByteStride() const override;
+};

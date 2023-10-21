@@ -352,116 +352,35 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 {
 	using namespace DirectX;
 	using namespace std;
-	float w2 = 1;
-	float h2 = 1;
-	float d2 = 1;
-	array<Vertex, 24> Vertices =
-	{
-		/*
-		Vertex({ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::White), XMFLOAT2(0.f, 1.f) }),
-		Vertex({ XMFLOAT3(-1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Black), XMFLOAT2(0.f, 0.f) }),
-		Vertex({ XMFLOAT3(+1.0f, +1.0f, -1.0f), XMFLOAT4(Colors::Red), XMFLOAT2(1.f, 0.f) }),
-		Vertex({ XMFLOAT3(+1.0f, -1.0f, -1.0f), XMFLOAT4(Colors::Green), XMFLOAT2(1.f, 1.f) }),
-
-		Vertex({ XMFLOAT3(-1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Blue), XMFLOAT2(0.f, 1.f) }), 
-		Vertex({ XMFLOAT3(-1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Yellow), XMFLOAT2(0.f, 0.f) }),
-		Vertex({ XMFLOAT3(+1.0f, +1.0f, +1.0f), XMFLOAT4(Colors::Cyan), XMFLOAT2(1.f, 0.f) }),
-		Vertex({ XMFLOAT3(+1.0f, -1.0f, +1.0f), XMFLOAT4(Colors::Magenta), XMFLOAT2(1.f, 1.f) })
-		*/
-		// Fill in the front face vertex data.
-	Vertex(-w2, -h2, -d2, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, -1.0f,    0.0f, 1.0f),
-	Vertex(-w2, +h2, -d2, 1.0f, 0.0f, 0.0f,  0.0f, 0.0f, -1.0f,    0.0f, 0.0f),
-	Vertex(+w2, +h2, -d2, 1.0f, 0.0f, 0.0f,   0.0f, 0.0f, -1.0f,   1.0f, 0.0f),
-	Vertex(+w2, -h2, -d2, 1.0f, 0.0f, 0.0f,  0.0f, 0.0f, -1.0f,   1.0f, 1.0f),
-
-	// Fill in the back face vertex data.
-	Vertex(-w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,  1.0f, 1.0f),
-	Vertex(+w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,  0.0f, 1.0f),
-	Vertex(+w2, +h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,  0.0f, 0.0f),
-	Vertex(-w2, +h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,  1.0f, 0.0f),
-
-	// Fill in the top face vertex data.
-	Vertex(-w2, +h2, -d2, 1.0f, 0.0f, 0.0f,  0.0f, 1.0f, 0.0f,    0.0f, 1.0f),
-	Vertex(-w2, +h2, +d2, 1.0f, 0.0f, 0.0f,  0.0f, 1.0f, 0.0f,    0.0f, 0.0f),
-	Vertex(+w2, +h2, +d2, 1.0f, 0.0f, 0.0f,  0.0f, 1.0f, 0.0f,    1.0f, 0.0f),
-	Vertex(+w2, +h2, -d2, 1.0f, 0.0f, 0.0f,  0.0f, 1.0f, 0.0f,    1.0f, 1.0f),
-
-	// Fill in the bottom face vertex data.
-	Vertex(-w2, -h2, -d2, -1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f,  1.0f, 1.0f),
-	Vertex(+w2, -h2, -d2, -1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 1.0f),
-	Vertex(+w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 0.0f, 0.0f),
-	Vertex(-w2, -h2, +d2, -1.0f, 0.0f, 0.0f, 0.0f, -1.0f, 0.0f, 1.0f, 0.0f),
-
-	// Fill in the left face vertex data.
-	Vertex(-w2, -h2, +d2, 0.0f, 0.0f, -1.0f,  -1.0f, 0.0f, 0.0f,  0.0f, 1.0f),
-	Vertex(-w2, +h2, +d2, 0.0f, 0.0f, -1.0f,  -1.0f, 0.0f, 0.0f,  0.0f, 0.0f),
-	Vertex(-w2, +h2, -d2, 0.0f, 0.0f, -1.0f, -1.0f, 0.0f, 0.0f,   1.0f, 0.0f),
-	Vertex(-w2, -h2, -d2, 0.0f, 0.0f, -1.0f,  -1.0f, 0.0f, 0.0f,  1.0f, 1.0f),
-
-	// Fill in the right face vertex data.
-	Vertex(+w2, -h2, -d2, 0.0f, 0.0f, 1.0f,  1.0f, 0.0f, 0.0f,  0.0f, 1.0f),
-	Vertex(+w2, +h2, -d2, 0.0f, 0.0f, 1.0f, 1.0f, 0.0f, 0.0f,  0.0f, 0.0f),
-	Vertex(+w2, +h2, +d2, 0.0f, 0.0f, 1.0f,  1.0f, 0.0f, 0.0f, 1.0f, 0.0f),
-	Vertex(+w2, -h2, +d2, 0.0f, 0.0f, 1.0f,  1.0f, 0.0f, 0.0f, 1.0f, 1.0f)
-	};
-
 	
-
-	uint16_t i[36];
-
-	// Fill in the front face index data
-	i[0] = 0; i[1] = 1; i[2] = 2;
-	i[3] = 0; i[4] = 2; i[5] = 3;
-
-	// Fill in the back face index data
-	i[6] = 4; i[7] = 5; i[8] = 6;
-	i[9] = 4; i[10] = 6; i[11] = 7;
-
-	// Fill in the top face index data
-	i[12] = 8; i[13] = 9; i[14] = 10;
-	i[15] = 8; i[16] = 10; i[17] = 11;
-
-	// Fill in the bottom face index data
-	i[18] = 12; i[19] = 13; i[20] = 14;
-	i[21] = 12; i[22] = 14; i[23] = 15;
-
-	// Fill in the left face index data
-	i[24] = 16; i[25] = 17; i[26] = 18;
-	i[27] = 16; i[28] = 18; i[29] = 19;
-
-	// Fill in the right face index data
-	i[30] = 20; i[31] = 21; i[32] = 22;
-	i[33] = 20; i[34] = 22; i[35] = 23;
-	
-	const UINT VertexBufferSize = Vertices.size() * sizeof(Vertex);
-	const UINT IndexBufferSize = 36 * sizeof(std::uint16_t);
+	BoxMeshData BoxMesh;
+	const UINT VertexBufferSize = BoxMesh.GetVerticesByteSize();
+	const UINT IndexBufferSize = BoxMesh.GetIndicesByteSize();
 
 	BoxGeometry = std::make_unique<MeshGeometry>();
 	BoxGeometry->Name = "boxGeometry";
 
 	ThrowIfFailed(D3DCreateBlob(VertexBufferSize, &BoxGeometry->VertexBufferCPU));
-	::memcpy(BoxGeometry->VertexBufferCPU->GetBufferPointer(), Vertices.data(), VertexBufferSize);
+	::memcpy(BoxGeometry->VertexBufferCPU->GetBufferPointer(), BoxMesh.GetVertices()->data(), VertexBufferSize);
 
 	ThrowIfFailed(D3DCreateBlob(IndexBufferSize, &BoxGeometry->IndexBufferCPU));
-	::memcpy(BoxGeometry->IndexBufferCPU->GetBufferPointer(), i, IndexBufferSize);
+	::memcpy(BoxGeometry->IndexBufferCPU->GetBufferPointer(), BoxMesh.GetIndices()->data(), IndexBufferSize);
 
 	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
-	//std::shared_ptr<CommandQueue> CommandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	//Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CommandList = CommandQueue->GetCommandList();
-
+	
 	BoxGeometry->VertexBufferUploader = make_unique<DefaultBufferUploader>();
-	BoxGeometry->VertexBufferUploader->CreateAndUpload(Device.Get(), CommandList, Vertices.data(), VertexBufferSize);
+	BoxGeometry->VertexBufferUploader->CreateAndUpload(Device.Get(), CommandList, BoxMesh.GetVertices()->data(), VertexBufferSize);
 
 	BoxGeometry->IndexBufferUploader = make_unique<DefaultBufferUploader>();
-	BoxGeometry->IndexBufferUploader->CreateAndUpload(Device.Get(), CommandList, i, IndexBufferSize);
+	BoxGeometry->IndexBufferUploader->CreateAndUpload(Device.Get(), CommandList, BoxMesh.GetIndices()->data(), IndexBufferSize);
 	
-	BoxGeometry->VertexByteStride = sizeof(Vertex);
+	BoxGeometry->VertexByteStride = BoxMesh.GetVertexByteStride();
 	BoxGeometry->VertexBufferByteSize = VertexBufferSize;
 	BoxGeometry->IndexFormat = DXGI_FORMAT_R16_UINT;
 	BoxGeometry->IndexBufferByteSize = IndexBufferSize;
 	
 	SubmeshGeometry Submesh;
-	Submesh.IndexCount = static_cast<UINT>(36);
+	Submesh.IndexCount = (UINT)BoxMesh.GetIndices()->size();
 	Submesh.StartIndexLocation = 0;
 	Submesh.BaseVertexLocation = 0;
 

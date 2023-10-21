@@ -10,6 +10,7 @@
 #include "UploadHelpers.h"
 #include "Texture.h"
 
+/*
 struct Vertex
 {
 	Vertex(float p1, float p2, float p3,
@@ -28,6 +29,7 @@ struct Vertex
 	DirectX::XMFLOAT3 Normal;
 	DirectX::XMFLOAT2 Tex;
 };
+*/
 
 //#pragma pack 4 
 struct ObjectConstants
