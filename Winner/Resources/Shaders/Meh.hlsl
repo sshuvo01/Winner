@@ -38,7 +38,8 @@ VertexOut VertexMain(VertexIn Vin)
 	Vout.Color = Vin.Color;
 	Vout.Tex = Vin.Tex;
 	//Vout.Normal = Vin.Normal; // No non uniform scaling yet
-	Vout.Normal = normalize(mul(float4(Vin.Normal, 1.f), gWorld).xyz);
+	//Vout.Normal = normalize(mul(float4(Vin.Normal, 1.0f), gWorld).xyz);
+	Vout.Normal = mul(Vin.Normal, (float3x3)gWorld);
 
 	return Vout;
 }
@@ -51,8 +52,10 @@ float4 PixelMain(VertexOut Pin) : SV_Target
 	//return float4(abs(Pin.Normal.x), abs(Pin.Normal.y), abs(Pin.Normal.z), 1.f);
 	//return float4(gLightDir, 1.f);
 	//return Pin.Color;
+	Pin.Normal = normalize(Pin.Normal);
 	float3 LightDirW = normalize(gLightDir);
-	float NDotL = max(dot(LightDirW, Pin.Normal), 0.f);
+	float NDotL = max(dot(-LightDirW, Pin.Normal), 0.f);
 	//return float4(NDotL, NDotL, NDotL, 1.f);
+	//return float4(Pin.Normal, 1.f);
 	return DiffuseAlbedo * NDotL;
 }

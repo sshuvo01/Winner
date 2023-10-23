@@ -99,11 +99,12 @@ private:
 
 	WRLComPtr<ID3D12RootSignature> RootSignature;
 	WRLComPtr<ID3D12PipelineState> PSO;
-	std::unique_ptr < BufferUploader<ObjectConstants, 2, true> > ObjectConstantBuffer;
+	std::unique_ptr < BufferUploader<ObjectConstants, 3, true> > ObjectConstantBuffer;
 	std::unique_ptr< Shader > VertexShader, PixelShader;
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> InputLayout;
 	std::unique_ptr<MeshGeometry> BoxGeometry;
+	std::unique_ptr<MeshGeometry> PlaneGeometry;
 
 	void ResizeDepthBuffer(int Width, int Height);
 

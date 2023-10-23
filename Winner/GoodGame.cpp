@@ -94,7 +94,7 @@ void GoodGame::OnUpdate(UpdateEventArgs & e)
 	XMMATRIX world = XMLoadFloat4x4(&WorldMat);
 	//world = XMMatrixRotationX(e.TotalTime) * XMMatrixTranslation(std::sin(e.TotalTime), 0.f, std::sin(e.TotalTime));
 	world = XMMatrixRotationX(e.TotalTime) * XMMatrixRotationY(std::sin(e.TotalTime))
-		* XMMatrixRotationZ(std::cos(e.TotalTime));// *XMMatrixTranslation(std::sin(e.TotalTime), 0.f, std::sin(e.TotalTime));
+		* XMMatrixRotationZ(std::cos(e.TotalTime)) * XMMatrixTranslation(0.f, -3.f, 0.f);// *XMMatrixTranslation(std::sin(e.TotalTime), 0.f, std::sin(e.TotalTime));
 	XMMATRIX proj = XMLoadFloat4x4(&ProjectionMat);
 
 	XMMATRIX worldViewProj = world * view * proj;
@@ -103,11 +103,12 @@ void GoodGame::OnUpdate(UpdateEventArgs & e)
 	ObjectConstants objConstants;
 	XMStoreFloat4x4(&objConstants.WorldViewProj, XMMatrixTranspose(worldViewProj));
 	XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
-	objConstants.LightDir = {  10.0f, 15.707f, 5.707f };
+	objConstants.LightDir = { -2.0f, -3.707f, -1.707f };
 	ObjectConstantBuffer->CopyData(&objConstants, 0);
-
+	
+	// Another box
 	ObjectConstants objConstants2 = objConstants;
-	XMMATRIX world2 = XMMatrixTranslation(0.f, 2.f, 0.f);
+	XMMATRIX world2 = XMMatrixTranslation(0.f, 2.1f, 0.f);
 	XMMATRIX worldViewProj2 = world2 * view * proj;
 
 	XMStoreFloat4x4(&objConstants2.WorldViewProj, XMMatrixTranspose(worldViewProj2));
@@ -115,6 +116,15 @@ void GoodGame::OnUpdate(UpdateEventArgs & e)
 
 	//world = XMMatrixRotationX(e.TotalTime) * XMMatrixTranslation(std::sin(e.TotalTime), 0.f, std::sin(e.TotalTime));
 	ObjectConstantBuffer->CopyData(&objConstants2, 1);
+	
+	// Plane constants
+	ObjectConstants objConstants3 = objConstants;
+	XMMATRIX World3 =  XMMatrixScaling(10.f, 10.f, 10.f) * XMMatrixTranslation(0.f, -5.f, 0.f);
+	XMMATRIX WorldViewProj3 = World3 * view * proj;
+	
+	XMStoreFloat4x4(&objConstants3.WorldViewProj, XMMatrixTranspose(WorldViewProj3));
+	XMStoreFloat4x4(&objConstants3.World, XMMatrixTranspose(World3));
+	ObjectConstantBuffer->CopyData(&objConstants3, 2);
 }
 
 void GoodGame::OnRender(RenderEventArgs & e)
@@ -170,7 +180,7 @@ void GoodGame::OnRender(RenderEventArgs & e)
 	const UINT YoIndexCount = BoxGeometry->DrawArgs["box"].IndexCount;
 	
 	CommandList->DrawIndexedInstanced(YoIndexCount, 1, 0, 0, 0);
-
+	
 	//
 	CommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 	CD3DX12_GPU_DESCRIPTOR_HANDLE Handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
@@ -178,6 +188,18 @@ void GoodGame::OnRender(RenderEventArgs & e)
 	CommandList->SetGraphicsRootDescriptorTable(0, Handle);
 
 	CommandList->DrawIndexedInstanced(YoIndexCount, 1, 0, 0, 0);
+
+	// Plane
+	CommandList->IASetVertexBuffers(0, 1, &PlaneGeometry->GetVertexBufferView());
+	CommandList->IASetIndexBuffer(&PlaneGeometry->GetIndexBufferView());
+
+
+	CD3DX12_GPU_DESCRIPTOR_HANDLE Hendal = CD3DX12_GPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
+	Hendal.Offset(2, Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+	CommandList->SetGraphicsRootDescriptorTable(0, Hendal);
+	const UINT YoYoIndexCount = PlaneGeometry->DrawArgs["plane"].IndexCount;
+	CommandList->DrawIndexedInstanced(YoYoIndexCount, 1, 0, 0, 0);
+
 	// Present
 	{
 		CD3DX12_RESOURCE_BARRIER Yobarrier = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(), 
@@ -222,7 +244,7 @@ void GoodGame::OnResize(ResizeEventArgs & e)
 void GoodGame::BuildDescriptorHeaps(ID3D12GraphicsCommandList2* CommandList)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC CbvHeapDesc;
-	CbvHeapDesc.NumDescriptors = 2;
+	CbvHeapDesc.NumDescriptors = 3;
 	CbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	CbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	CbvHeapDesc.NodeMask = 0;
@@ -258,7 +280,7 @@ void GoodGame::BuildDescriptorHeaps(ID3D12GraphicsCommandList2* CommandList)
 void GoodGame::BuildConstantBuffers(ID3D12GraphicsCommandList2* CommandList)
 {
 	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
-	ObjectConstantBuffer = std::make_unique< BufferUploader<ObjectConstants, 2, true>>(Device.Get());
+	ObjectConstantBuffer = std::make_unique< BufferUploader<ObjectConstants, 3, true>>(Device.Get());
 	
 	D3D12_CONSTANT_BUFFER_VIEW_DESC BufferDesc;
 	BufferDesc.BufferLocation = ObjectConstantBuffer->GetBuffer()->GetGPUVirtualAddress();
@@ -276,6 +298,18 @@ void GoodGame::BuildConstantBuffers(ID3D12GraphicsCommandList2* CommandList)
 	BufferDesc2.SizeInBytes = ObjectConstantBuffer->GetElementSize();
 
 	Device->CreateConstantBufferView(&BufferDesc2, Handle);
+
+	// Still
+	//CD3DX12_CPU_DESCRIPTOR_HANDLE Handle2 = CD3DX12_CPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetCPUDescriptorHandleForHeapStart());
+	//UINT IncSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	CD3DX12_CPU_DESCRIPTOR_HANDLE Handle2 = CD3DX12_CPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetCPUDescriptorHandleForHeapStart());
+	Handle2.Offset(2, IncSize);
+
+	D3D12_CONSTANT_BUFFER_VIEW_DESC BufferDesc3;
+	BufferDesc3.BufferLocation = ObjectConstantBuffer->GetBuffer()->GetGPUVirtualAddress() + 2 * ObjectConstantBuffer->GetElementSize();
+	BufferDesc3.SizeInBytes = ObjectConstantBuffer->GetElementSize();
+
+	Device->CreateConstantBufferView(&BufferDesc3, Handle2);
 }
 
 void GoodGame::BuildRootSignature(ID3D12GraphicsCommandList2* CommandList)
@@ -353,11 +387,12 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 	using namespace DirectX;
 	using namespace std;
 	
+	// Box!
 	BoxMeshData BoxMesh;
 	const UINT VertexBufferSize = BoxMesh.GetVerticesByteSize();
 	const UINT IndexBufferSize = BoxMesh.GetIndicesByteSize();
 
-	BoxGeometry = std::make_unique<MeshGeometry>();
+	BoxGeometry = make_unique<MeshGeometry>();
 	BoxGeometry->Name = "boxGeometry";
 
 	ThrowIfFailed(D3DCreateBlob(VertexBufferSize, &BoxGeometry->VertexBufferCPU));
@@ -385,6 +420,35 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 	Submesh.BaseVertexLocation = 0;
 
 	BoxGeometry->DrawArgs["box"] = Submesh;
+
+	// Plane!
+	PlaneMeshData PlaneMesh;
+	PlaneGeometry = make_unique<MeshGeometry>();
+	PlaneGeometry->Name = "planeGeometry";
+
+	ThrowIfFailed(D3DCreateBlob(PlaneMesh.GetVerticesByteSize(), &PlaneGeometry->VertexBufferCPU));
+	::memcpy(PlaneGeometry->VertexBufferCPU->GetBufferPointer(), PlaneMesh.GetVertices()->data(), PlaneMesh.GetVerticesByteSize());
+
+	ThrowIfFailed(D3DCreateBlob(PlaneMesh.GetIndicesByteSize(), &PlaneGeometry->IndexBufferCPU));
+	::memcpy(PlaneGeometry->IndexBufferCPU->GetBufferPointer(), PlaneMesh.GetIndices()->data(), PlaneMesh.GetIndicesByteSize());
+	
+	PlaneGeometry->VertexBufferUploader = make_unique<DefaultBufferUploader>();
+	PlaneGeometry->VertexBufferUploader->CreateAndUpload(Device.Get(), CommandList, PlaneMesh.GetVertices()->data(), PlaneMesh.GetVerticesByteSize());
+	
+	PlaneGeometry->IndexBufferUploader = make_unique<DefaultBufferUploader>();
+	PlaneGeometry->IndexBufferUploader->CreateAndUpload(Device.Get(), CommandList, PlaneMesh.GetIndices()->data(), PlaneMesh.GetIndicesByteSize());
+
+	PlaneGeometry->VertexByteStride = PlaneMesh.GetVertexByteStride();
+	PlaneGeometry->VertexBufferByteSize = PlaneMesh.GetVerticesByteSize();
+	PlaneGeometry->IndexFormat = DXGI_FORMAT_R16_UINT;
+	PlaneGeometry->IndexBufferByteSize = PlaneMesh.GetIndicesByteSize();
+
+	SubmeshGeometry Submesh2;
+	Submesh2.IndexCount = (UINT)PlaneMesh.GetIndices()->size();
+	Submesh2.StartIndexLocation = 0;
+	Submesh2.BaseVertexLocation = 0;
+
+	PlaneGeometry->DrawArgs["plane"] = Submesh2;
 }
 
 void GoodGame::BuildPSO(ID3D12GraphicsCommandList2* CommandList)
