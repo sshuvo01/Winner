@@ -117,5 +117,6 @@ private:
 
 	uint64_t m_FenceValues[Window::BufferCount] = {};
 	std::unique_ptr<Texture> BoxTexture;
+	std::unique_ptr<Texture> AnotherTexture;
 };
 

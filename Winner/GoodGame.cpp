@@ -35,7 +35,6 @@ bool GoodGame::LoadContent()
 
 	DirectX::LoadFromDDSFile(L"", 0, &Metadata, ScratchImage);
 	*/
-	BoxTexture = std::make_unique<Texture>();
 	//MehTexture->Load(L"", )
 
 	if (!bLoadedContent)
@@ -44,7 +43,11 @@ bool GoodGame::LoadContent()
 		WRLComPtr<ID3D12GraphicsCommandList2> CommandList = CommandQueue->GetCommandList();
 		Microsoft::WRL::ComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
 
-		BoxTexture->Load(ResourceDirectory<std::wstring>::GetPath() + L"Textures\\Directx9.png", Device.Get(), CommandList.Get());
+		BoxTexture = std::make_unique<Texture>();
+		BoxTexture->Load(ResourceDirectory<std::wstring>::GetPath() + L"Textures\\Me.jpg", Device.Get(), CommandList.Get());
+
+		AnotherTexture = std::make_unique<Texture>();
+		AnotherTexture->Load(ResourceDirectory<std::wstring>::GetPath() + L"Textures\\Directx9.png", Device.Get(), CommandList.Get());
 
 		BuildDescriptorHeaps(CommandList.Get());
 		BuildConstantBuffers(CommandList.Get());
@@ -192,12 +195,18 @@ void GoodGame::OnRender(RenderEventArgs & e)
 	// Plane
 	CommandList->IASetVertexBuffers(0, 1, &PlaneGeometry->GetVertexBufferView());
 	CommandList->IASetIndexBuffer(&PlaneGeometry->GetIndexBufferView());
+	
+	CommandList->SetDescriptorHeaps(_countof(descriptorHeaps2), descriptorHeaps2);
+	CD3DX12_GPU_DESCRIPTOR_HANDLE TexHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(SrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+	TexHandle.Offset(1, Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+	CommandList->SetGraphicsRootDescriptorTable(1, TexHandle);
 
-
+	CommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
 	CD3DX12_GPU_DESCRIPTOR_HANDLE Hendal = CD3DX12_GPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
 	Hendal.Offset(2, Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
 	CommandList->SetGraphicsRootDescriptorTable(0, Hendal);
 	const UINT YoYoIndexCount = PlaneGeometry->DrawArgs["plane"].IndexCount;
+	
 	CommandList->DrawIndexedInstanced(YoYoIndexCount, 1, 0, 0, 0);
 
 	// Present
@@ -256,25 +265,43 @@ void GoodGame::BuildDescriptorHeaps(ID3D12GraphicsCommandList2* CommandList)
 
 	// Shader resource view...
 	D3D12_DESCRIPTOR_HEAP_DESC SrvHeapDesc = {};
-	SrvHeapDesc.NumDescriptors = 1;
+	SrvHeapDesc.NumDescriptors = 2;
 	SrvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	SrvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	ThrowIfFailed(Device->CreateDescriptorHeap(&SrvHeapDesc, IID_PPV_ARGS(SrvDescriptorHeap.GetAddressOf())));
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE TexDescriptor(SrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-
+	
 	//std::unique_ptr<Texture>& Stonk = mTextures["woodCrateTex"];
-	ID3D12Resource* woodCrateTex = BoxTexture->GetDefaultBuffer(); //mTextures["woodCrateTex"]->Resource;
+	ID3D12Resource* WoodCrateTex = BoxTexture->GetDefaultBuffer(); //mTextures["woodCrateTex"]->Resource;
+
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC SrvDesc = {};
 	SrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	SrvDesc.Format = woodCrateTex->GetDesc().Format;
+	SrvDesc.Format = WoodCrateTex->GetDesc().Format;
 	SrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	SrvDesc.Texture2D.MostDetailedMip = 0;
 	SrvDesc.Texture2D.MipLevels = BoxTexture->GetAvailableMipLevels();//1;// woodCrateTex->GetDesc().MipLevels;
 	SrvDesc.Texture2D.ResourceMinLODClamp = 0;
 
-	Device->CreateShaderResourceView(woodCrateTex, &SrvDesc, TexDescriptor);
+	Device->CreateShaderResourceView(WoodCrateTex, &SrvDesc, TexDescriptor);
+	
+	// A new texture
+	ID3D12Resource* AnotherTex = AnotherTexture->GetDefaultBuffer();
+
+	CD3DX12_CPU_DESCRIPTOR_HANDLE TexHandle(SrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+	UINT IncSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	TexHandle.Offset(1, IncSize);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC SrvDesc2 = {};
+	SrvDesc2.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	SrvDesc2.Format = AnotherTex->GetDesc().Format;
+	SrvDesc2.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	SrvDesc2.Texture2D.MostDetailedMip = 0;
+	SrvDesc2.Texture2D.MipLevels = AnotherTexture->GetAvailableMipLevels();
+	SrvDesc2.Texture2D.ResourceMinLODClamp = 0;
+
+	Device->CreateShaderResourceView(AnotherTex, &SrvDesc2, TexHandle);
 }
 
 void GoodGame::BuildConstantBuffers(ID3D12GraphicsCommandList2* CommandList)
