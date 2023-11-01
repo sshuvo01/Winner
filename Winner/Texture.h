@@ -11,6 +11,8 @@ public:
 	void Load(CRef<std::wstring> InFilename, ID3D12Device* Device, ID3D12GraphicsCommandList2* CmdList);
 	FORCEINLINE UINT32 GetAvailableMipLevels() const { return AvailableMipLevels; }
 	FORCEINLINE ID3D12Resource* GetDefaultBuffer() const { return TextureDataUploader->GetDefaultBuffer(); }
+	FORCEINLINE std::wstring GetFilename() const { return Filename; }
+
 private:
 	std::unique_ptr<DefaultBufferUploader> TextureDataUploader;
 	std::wstring Filename;

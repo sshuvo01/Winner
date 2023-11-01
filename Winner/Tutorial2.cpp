@@ -320,7 +320,7 @@ void Tutorial2::OnUpdate(UpdateEventArgs& e)
 
 		char buffer[512];
 		sprintf_s(buffer, "FPS: %f\n", fps);
-		OutputDebugStringA(buffer);
+		//OutputDebugStringA(buffer);
 
 		frameCount = 0;
 		totalTime = 0.0;

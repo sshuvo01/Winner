@@ -1,3 +1,4 @@
+#pragma pack_matrix( row_major )
 
 Texture2D    gDiffuseMap : register(t0);
 SamplerState gSampler  : register(s0);

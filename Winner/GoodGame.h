@@ -9,29 +9,8 @@
 #include "Window.h"
 #include "UploadHelpers.h"
 #include "Texture.h"
+#include "Renderable.h"
 
-/*
-struct Vertex
-{
-	Vertex(float p1, float p2, float p3,
-		float c1, float c2, float c3,
-		float n1, float n2, float n3,
-		float u, float v)
-	{
-		Position = DirectX::XMFLOAT3(p1, p2, p3);
-		Color = DirectX::XMFLOAT4(c1, c2, c3, 1.f);
-		Tex = DirectX::XMFLOAT2(u, v);
-		Normal = DirectX::XMFLOAT3(n1, n2, n3);
-	}
-
-	DirectX::XMFLOAT3 Position;
-	DirectX::XMFLOAT4 Color;
-	DirectX::XMFLOAT3 Normal;
-	DirectX::XMFLOAT2 Tex;
-};
-*/
-
-//#pragma pack 4 
 struct ObjectConstants
 {
 	DirectX::XMFLOAT3 LightDir; float Padding;
@@ -90,21 +69,22 @@ private:
 	bool bLoadedContent;
 
 	void BuildDescriptorHeaps(ID3D12GraphicsCommandList2* CommandList);
+	void BuildShaderResrources(ID3D12GraphicsCommandList2* CommandList);
 	void BuildConstantBuffers(ID3D12GraphicsCommandList2* CommandList);
 	void BuildRootSignature(ID3D12GraphicsCommandList2* CommandList);
 	void BuildShadersAndInputLayout(ID3D12GraphicsCommandList2* CommandList);
-	void BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList);
+	void BuildGeometry(ID3D12GraphicsCommandList2* CommandList);
 	void BuildPSO(ID3D12GraphicsCommandList2* CommandList);
 	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
 
 	WRLComPtr<ID3D12RootSignature> RootSignature;
 	WRLComPtr<ID3D12PipelineState> PSO;
-	std::unique_ptr < BufferUploader<ObjectConstants, 3, true> > ObjectConstantBuffer;
+	std::unique_ptr < BufferUploader<ObjectConstants, true> > ObjectConstantBuffer;
 	std::unique_ptr< Shader > VertexShader, PixelShader;
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> InputLayout;
-	std::unique_ptr<MeshGeometry> BoxGeometry;
-	std::unique_ptr<MeshGeometry> PlaneGeometry;
+	//std::shared_ptr<MeshGeometry> BoxGeometry;
+	//std::shared_ptr<MeshGeometry> PlaneGeometry;
 
 	void ResizeDepthBuffer(int Width, int Height);
 
@@ -115,8 +95,14 @@ private:
 	WRLComPtr<ID3D12DescriptorHeap> ConstantBufferHeap;
 	WRLComPtr<ID3D12DescriptorHeap> SrvDescriptorHeap;
 
-	uint64_t m_FenceValues[Window::BufferCount] = {};
-	std::unique_ptr<Texture> BoxTexture;
-	std::unique_ptr<Texture> AnotherTexture;
+	uint64_t FenceValues[Window::BufferCount] = {};
+	//std::unique_ptr<Texture> BoxTexture;
+	//std::unique_ptr<Texture> AnotherTexture;
+
+	std::vector<std::unique_ptr<Renderable>> Renderables;
+	std::vector<std::unique_ptr<Texture>> Textures;
+
+	static constexpr const char* ConstantStr = "Constant";
+	static constexpr const char* TextureStr = "Texture";
 };
 

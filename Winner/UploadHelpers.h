@@ -21,11 +21,12 @@ private:
 	WRLComPtr<ID3D12Resource> UploadBuffer;
 };
 
-template<typename T, UINT64 _ElementCount, bool _Constant = true>
+template<typename T, bool _Constant = true>
 class BufferUploader : public NonCopyable
 {
 public:
-	BufferUploader(ID3D12Device* Device)
+	BufferUploader(ID3D12Device* Device, UINT64 InElementCount)
+		: ElementCount(InElementCount)
 	{
 		ElementSize = sizeof(T);
 		

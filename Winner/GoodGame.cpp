@@ -5,12 +5,12 @@
 #include "CommandQueue.h"
 #include "Window.h"
 
-
 #include <DirectXTex/DirectXTex/DirectXTex.h>
 #include <d3dcompiler.h>
 
 #include <DirectXColors.h>
 #include <algorithm> // For std::min and std::max.
+#include <sstream>
 #if defined(min)
 #undef min
 #endif
@@ -29,13 +29,7 @@ GoodGame::GoodGame(const std::wstring & Name, int Width, int Height, bool VSync)
 
 bool GoodGame::LoadContent()
 {
-	/*
-	DirectX::TexMetadata Metadata;
-	DirectX::ScratchImage ScratchImage;
-
-	DirectX::LoadFromDDSFile(L"", 0, &Metadata, ScratchImage);
-	*/
-	//MehTexture->Load(L"", )
+	using namespace std;
 
 	if (!bLoadedContent)
 	{
@@ -43,17 +37,21 @@ bool GoodGame::LoadContent()
 		WRLComPtr<ID3D12GraphicsCommandList2> CommandList = CommandQueue->GetCommandList();
 		Microsoft::WRL::ComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
 
-		BoxTexture = std::make_unique<Texture>();
-		BoxTexture->Load(ResourceDirectory<std::wstring>::GetPath() + L"Textures\\Me.jpg", Device.Get(), CommandList.Get());
+		unique_ptr<Texture> Texture1 = std::make_unique<Texture>();
+		Texture1->Load(ResourceDirectory<std::wstring>::GetPath() + L"Textures\\Me.jpg", Device.Get(), CommandList.Get());
 
-		AnotherTexture = std::make_unique<Texture>();
-		AnotherTexture->Load(ResourceDirectory<std::wstring>::GetPath() + L"Textures\\Directx9.png", Device.Get(), CommandList.Get());
+		unique_ptr<Texture> Texture2 = std::make_unique<Texture>();
+		Texture2->Load(ResourceDirectory<std::wstring>::GetPath() + L"Textures\\Directx9.png", Device.Get(), CommandList.Get());
 
+		Textures.push_back(move(Texture1));
+		Textures.push_back(move(Texture2));
+
+		BuildGeometry(CommandList.Get());
 		BuildDescriptorHeaps(CommandList.Get());
+		BuildShaderResrources(CommandList.Get());
 		BuildConstantBuffers(CommandList.Get());
 		BuildRootSignature(CommandList.Get());
 		BuildShadersAndInputLayout(CommandList.Get());
-		BuildBoxGeometry(CommandList.Get());
 		BuildPSO(CommandList.Get());
 
 		bLoadedContent = true; // ?
@@ -64,7 +62,6 @@ bool GoodGame::LoadContent()
 		dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 		dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 		ThrowIfFailed(Application::Get().GetDevice()->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_DSVHeap)));
-
 
 		/*
 		Before leaving the LoadContent method, the command list must be executed on the command queue
@@ -82,52 +79,90 @@ void GoodGame::UnloadContent()
 {
 }
 
+//template <template<class, class> class V, class T, class A>
+//static void ftemplatetemplate(V<T, A> &v) {
+//	// This can be "typename V<T, A>::value_type",
+//	// but we are pretending we don't have it
+//
+//	//T temp = v.back();
+//	//v.pop_back();
+//	v.push_back(T());
+//	T a;
+//	a.foo();
+//	// Do some work on temp
+//	
+//	//std::cout << temp << std::endl;
+//}
+
 void GoodGame::OnUpdate(UpdateEventArgs & e)
 {
 	Game::OnUpdate(e);
 	using namespace DirectX;
+	using namespace std;
+
 	// Build the view matrix.
 	DirectX::XMVECTOR pos = DirectX::XMVectorSet(5.f, 6.f, 3.f, 1.f);
 	DirectX::XMVECTOR target = DirectX::XMVectorZero();
 	DirectX::XMVECTOR up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
-	XMMATRIX view = XMMatrixLookAtLH(pos, target, up);
-	XMStoreFloat4x4(&ViewMat, view);
-
-	XMMATRIX world = XMLoadFloat4x4(&WorldMat);
-	//world = XMMatrixRotationX(e.TotalTime) * XMMatrixTranslation(std::sin(e.TotalTime), 0.f, std::sin(e.TotalTime));
-	world = XMMatrixRotationX(e.TotalTime) * XMMatrixRotationY(std::sin(e.TotalTime))
-		* XMMatrixRotationZ(std::cos(e.TotalTime)) * XMMatrixTranslation(0.f, -3.f, 0.f);// *XMMatrixTranslation(std::sin(e.TotalTime), 0.f, std::sin(e.TotalTime));
+	XMMATRIX View = XMMatrixLookAtLH(pos, target, up);
+	XMStoreFloat4x4(&ViewMat, View);
 	XMMATRIX proj = XMLoadFloat4x4(&ProjectionMat);
 
-	XMMATRIX worldViewProj = world * view * proj;
+	DirectX::XMFLOAT3 LightDirection = { -2.0f, -3.707f, -1.707f };
+	for (const auto& Rable : Renderables)
+	{
+		Rable->Update(e);
+		XMMATRIX WorldViewProj = Rable->WorldMat * View * proj;
+		ObjectConstants ObjConstants;
+		XMStoreFloat4x4(&ObjConstants.WorldViewProj, WorldViewProj);
+		XMStoreFloat4x4(&ObjConstants.World, Rable->WorldMat);
+		ObjConstants.LightDir = LightDirection;
+		ObjectConstantBuffer->CopyData(&ObjConstants, Rable->HeapIndexMap[ConstantStr]);
+	}
 
 	// Update the constant buffer with the latest worldViewProj matrix.
-	ObjectConstants objConstants;
-	XMStoreFloat4x4(&objConstants.WorldViewProj, XMMatrixTranspose(worldViewProj));
-	XMStoreFloat4x4(&objConstants.World, XMMatrixTranspose(world));
-	objConstants.LightDir = { -2.0f, -3.707f, -1.707f };
-	ObjectConstantBuffer->CopyData(&objConstants, 0);
+	//objConstants.LightDir = { -2.0f, -3.707f, -1.707f };
 	
 	// Another box
-	ObjectConstants objConstants2 = objConstants;
+	/*ObjectConstants objConstants2 = objConstants;
 	XMMATRIX world2 = XMMatrixTranslation(0.f, 2.1f, 0.f);
-	XMMATRIX worldViewProj2 = world2 * view * proj;
-
-	XMStoreFloat4x4(&objConstants2.WorldViewProj, XMMatrixTranspose(worldViewProj2));
-	XMStoreFloat4x4(&objConstants2.World, XMMatrixTranspose(world2));
-
-	//world = XMMatrixRotationX(e.TotalTime) * XMMatrixTranslation(std::sin(e.TotalTime), 0.f, std::sin(e.TotalTime));
-	ObjectConstantBuffer->CopyData(&objConstants2, 1);
+	XMMATRIX worldViewProj2 = world2 * view * proj;*/
 	
-	// Plane constants
-	ObjectConstants objConstants3 = objConstants;
-	XMMATRIX World3 =  XMMatrixScaling(10.f, 10.f, 10.f) * XMMatrixTranslation(0.f, -5.f, 0.f);
-	XMMATRIX WorldViewProj3 = World3 * view * proj;
-	
-	XMStoreFloat4x4(&objConstants3.WorldViewProj, XMMatrixTranspose(WorldViewProj3));
-	XMStoreFloat4x4(&objConstants3.World, XMMatrixTranspose(World3));
-	ObjectConstantBuffer->CopyData(&objConstants3, 2);
+	//XMMATRIX World2T = XMMatrixTranspose(world2);
+
+	//XMStoreFloat4x4(&objConstants2.WorldViewProj, worldViewProj2);
+	//XMStoreFloat4x4(&objConstants2.World, world2);
+
+	////world = XMMatrixRotationX(e.TotalTime) * XMMatrixTranslation(std::sin(e.TotalTime), 0.f, std::sin(e.TotalTime));
+	//ObjectConstantBuffer->CopyData(&objConstants2, 1);
+	//
+	//// Plane constants
+	//ObjectConstants objConstants3 = objConstants;
+	//XMMATRIX World3 =  XMMatrixScaling(10.f, 10.f, 10.f) * XMMatrixTranslation(0.f, -5.f, 0.f);
+	//XMMATRIX WorldViewProj3 = World3 * view * proj;
+	//
+	//XMStoreFloat4x4(&objConstants3.WorldViewProj, WorldViewProj3);
+	//XMStoreFloat4x4(&objConstants3.World, World3);
+	//ObjectConstantBuffer->CopyData(&objConstants3, 2);
+
+
+	//std::stringstream SS;
+	//std::string sss;
+	//SS << "This is a test " << 2 << " " << 2.132f << std::endl;
+	//std::string Str = SS.str();
+	//::OutputDebugStringA(Str.c_str());
+
+	//Useful::FormattedString YoString("test ", 2, " ", 3.1416f, " meh");
+	//::OutputDebugStringA(YoString.GetCStr());
+	//YoString.GetFormattedDebugString("test", 2, 2.132f);
+	/*class Test
+	{
+	public:
+		void foo() {};
+	};
+	std::vector<Test> saf;
+	ftemplatetemplate(saf);*/
 }
 
 void GoodGame::OnRender(RenderEventArgs & e)
@@ -137,78 +172,52 @@ void GoodGame::OnRender(RenderEventArgs & e)
 	auto CommandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	WRLComPtr<ID3D12GraphicsCommandList2> CommandList = CommandQueue->GetCommandList();
 
-	UINT currentBackBufferIndex = m_pWindow->GetCurrentBackBufferIndex();
+	UINT CurrentBackBufferIndex = m_pWindow->GetCurrentBackBufferIndex();
 	Microsoft::WRL::ComPtr<ID3D12Resource> backBuffer = m_pWindow->GetCurrentBackBuffer();
-	D3D12_CPU_DESCRIPTOR_HANDLE rtv = m_pWindow->GetCurrentRenderTargetView();
-	D3D12_CPU_DESCRIPTOR_HANDLE dsv = m_DSVHeap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_CPU_DESCRIPTOR_HANDLE Rtv = m_pWindow->GetCurrentRenderTargetView();
+	D3D12_CPU_DESCRIPTOR_HANDLE Dsv = m_DSVHeap->GetCPUDescriptorHandleForHeapStart();
 
 	// Clear the render targets.
 	{
-		CD3DX12_RESOURCE_BARRIER Yobarrier = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+		CD3DX12_RESOURCE_BARRIER RTBarrier = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 		
-		CommandList->ResourceBarrier(1, &Yobarrier);
-		//TransitionResource(commandList, backBuffer,
-		//	D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
-
+		CommandList->ResourceBarrier(1, &RTBarrier);
 		FLOAT clearColor[] = { 0.2f, 0.2f, 0.2f, 1.0f };
-
-		//ClearRTV(commandList, rtv, clearColor);
-		CommandList->ClearRenderTargetView(rtv, clearColor, 0, nullptr);
-		//ClearDepth(commandList, dsv);
-		CommandList->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
+		CommandList->ClearRenderTargetView(Rtv, clearColor, 0, nullptr);
+		CommandList->ClearDepthStencilView(Dsv, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
 	}
 
 	CommandList->SetPipelineState(PSO.Get());
 	CommandList->SetGraphicsRootSignature(RootSignature.Get());
 
 	CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	CommandList->IASetVertexBuffers(0, 1, &BoxGeometry->GetVertexBufferView());
-	CommandList->IASetIndexBuffer(&BoxGeometry->GetIndexBufferView());
-
-
-
 	CommandList->RSSetViewports(1, &Viewport);
 	CommandList->RSSetScissorRects(1, &ScissorRect);
+	CommandList->OMSetRenderTargets(1, &Rtv, FALSE, &Dsv);
 
-	CommandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
-
-	ID3D12DescriptorHeap* descriptorHeaps[] = { ConstantBufferHeap.Get() };
-	CommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
-	CommandList->SetGraphicsRootDescriptorTable(0, ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
+	for (const auto& Rable : Renderables)
+	{
+		CommandList->IASetVertexBuffers(0, 1, &Rable->MeshGeo->GetVertexBufferView());
+		CommandList->IASetIndexBuffer(&Rable->MeshGeo->GetIndexBufferView());
+		
+		ID3D12DescriptorHeap* ConstantHeaps[] = { ConstantBufferHeap.Get() };
+		CommandList->SetDescriptorHeaps(_countof(ConstantHeaps), ConstantHeaps);
+		CD3DX12_GPU_DESCRIPTOR_HANDLE CBHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
+		CBHandle.Offset(Rable->HeapIndexMap[ConstantStr],
+			Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+		CommandList->SetGraphicsRootDescriptorTable(0, CBHandle);
+		
+		ID3D12DescriptorHeap** ShaderResourceHeap = SrvDescriptorHeap.GetAddressOf();
+		CommandList->SetDescriptorHeaps(1, ShaderResourceHeap);
+		CD3DX12_GPU_DESCRIPTOR_HANDLE SrvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(SrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+		SrvHandle.Offset(Rable->HeapIndexMap[TextureStr],
+			Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+		CommandList->SetGraphicsRootDescriptorTable(1, SrvHandle);
+		
+		const UINT IndexCount = Rable->MeshGeo->DrawArgs["default"].IndexCount;
+		CommandList->DrawIndexedInstanced(IndexCount, 1, 0, 0, 0);
+	}
 	
-	ID3D12DescriptorHeap* descriptorHeaps2[] = { SrvDescriptorHeap.Get() };
-	CommandList->SetDescriptorHeaps(_countof(descriptorHeaps2), descriptorHeaps2);
-	CommandList->SetGraphicsRootDescriptorTable(1, SrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-
-	const UINT YoIndexCount = BoxGeometry->DrawArgs["box"].IndexCount;
-	
-	CommandList->DrawIndexedInstanced(YoIndexCount, 1, 0, 0, 0);
-	
-	//
-	CommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
-	CD3DX12_GPU_DESCRIPTOR_HANDLE Handle = CD3DX12_GPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
-	Handle.Offset(1, Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
-	CommandList->SetGraphicsRootDescriptorTable(0, Handle);
-
-	CommandList->DrawIndexedInstanced(YoIndexCount, 1, 0, 0, 0);
-
-	// Plane
-	CommandList->IASetVertexBuffers(0, 1, &PlaneGeometry->GetVertexBufferView());
-	CommandList->IASetIndexBuffer(&PlaneGeometry->GetIndexBufferView());
-	
-	CommandList->SetDescriptorHeaps(_countof(descriptorHeaps2), descriptorHeaps2);
-	CD3DX12_GPU_DESCRIPTOR_HANDLE TexHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(SrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-	TexHandle.Offset(1, Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
-	CommandList->SetGraphicsRootDescriptorTable(1, TexHandle);
-
-	CommandList->SetDescriptorHeaps(_countof(descriptorHeaps), descriptorHeaps);
-	CD3DX12_GPU_DESCRIPTOR_HANDLE Hendal = CD3DX12_GPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
-	Hendal.Offset(2, Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
-	CommandList->SetGraphicsRootDescriptorTable(0, Hendal);
-	const UINT YoYoIndexCount = PlaneGeometry->DrawArgs["plane"].IndexCount;
-	
-	CommandList->DrawIndexedInstanced(YoYoIndexCount, 1, 0, 0, 0);
-
 	// Present
 	{
 		CD3DX12_RESOURCE_BARRIER Yobarrier = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(), 
@@ -216,12 +225,9 @@ void GoodGame::OnRender(RenderEventArgs & e)
 			D3D12_RESOURCE_STATE_PRESENT);
 
 		CommandList->ResourceBarrier(1, &Yobarrier);
-
-		m_FenceValues[currentBackBufferIndex] = CommandQueue->ExecuteCommandList(CommandList);
-
-		currentBackBufferIndex = m_pWindow->Present();
-
-		CommandQueue->WaitForFenceValue(m_FenceValues[currentBackBufferIndex]);
+		FenceValues[CurrentBackBufferIndex] = CommandQueue->ExecuteCommandList(CommandList);
+		CurrentBackBufferIndex = m_pWindow->Present();
+		CommandQueue->WaitForFenceValue(FenceValues[CurrentBackBufferIndex]);
 	}
 }
 
@@ -237,8 +243,6 @@ void GoodGame::OnMouseWheel(MouseWheelEventArgs & e)
 
 void GoodGame::OnResize(ResizeEventArgs & e)
 {
-	//Game::OnResize(e);
-
 	if (e.Width != GetClientWidth() || e.Height != GetClientHeight())
 	{
 		Game::OnResize(e);
@@ -259,84 +263,54 @@ void GoodGame::BuildDescriptorHeaps(ID3D12GraphicsCommandList2* CommandList)
 	CbvHeapDesc.NodeMask = 0;
 
 	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
-
 	ThrowIfFailed(Device->CreateDescriptorHeap(&CbvHeapDesc,
 		IID_PPV_ARGS(&ConstantBufferHeap)) );
 
-	// Shader resource view...
+	// Shader resource view... textures
 	D3D12_DESCRIPTOR_HEAP_DESC SrvHeapDesc = {};
-	SrvHeapDesc.NumDescriptors = 2;
+	SrvHeapDesc.NumDescriptors = Textures.size();
 	SrvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	SrvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	ThrowIfFailed(Device->CreateDescriptorHeap(&SrvHeapDesc, IID_PPV_ARGS(SrvDescriptorHeap.GetAddressOf())));
+}
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE TexDescriptor(SrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-	
-	//std::unique_ptr<Texture>& Stonk = mTextures["woodCrateTex"];
-	ID3D12Resource* WoodCrateTex = BoxTexture->GetDefaultBuffer(); //mTextures["woodCrateTex"]->Resource;
-
-
-	D3D12_SHADER_RESOURCE_VIEW_DESC SrvDesc = {};
-	SrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	SrvDesc.Format = WoodCrateTex->GetDesc().Format;
-	SrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	SrvDesc.Texture2D.MostDetailedMip = 0;
-	SrvDesc.Texture2D.MipLevels = BoxTexture->GetAvailableMipLevels();//1;// woodCrateTex->GetDesc().MipLevels;
-	SrvDesc.Texture2D.ResourceMinLODClamp = 0;
-
-	Device->CreateShaderResourceView(WoodCrateTex, &SrvDesc, TexDescriptor);
-	
-	// A new texture
-	ID3D12Resource* AnotherTex = AnotherTexture->GetDefaultBuffer();
-
-	CD3DX12_CPU_DESCRIPTOR_HANDLE TexHandle(SrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-	UINT IncSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	TexHandle.Offset(1, IncSize);
-
-	D3D12_SHADER_RESOURCE_VIEW_DESC SrvDesc2 = {};
-	SrvDesc2.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-	SrvDesc2.Format = AnotherTex->GetDesc().Format;
-	SrvDesc2.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	SrvDesc2.Texture2D.MostDetailedMip = 0;
-	SrvDesc2.Texture2D.MipLevels = AnotherTexture->GetAvailableMipLevels();
-	SrvDesc2.Texture2D.ResourceMinLODClamp = 0;
-
-	Device->CreateShaderResourceView(AnotherTex, &SrvDesc2, TexHandle);
+void GoodGame::BuildShaderResrources(ID3D12GraphicsCommandList2* CommandList)
+{
+	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
+	const UINT HandleIncSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	for (size_t Idx = 0; Idx < Textures.size(); Idx++)
+	{
+		const auto& Tex = Textures[Idx];
+		CD3DX12_CPU_DESCRIPTOR_HANDLE TexHandle(SrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+		TexHandle.Offset(Idx, HandleIncSize);
+		ID3D12Resource* TexResource = Tex->GetDefaultBuffer();
+		D3D12_SHADER_RESOURCE_VIEW_DESC SrvDesc = {};
+		SrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		SrvDesc.Format = TexResource->GetDesc().Format;
+		SrvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		SrvDesc.Texture2D.MostDetailedMip = 0;
+		SrvDesc.Texture2D.MipLevels = Tex->GetAvailableMipLevels();
+		SrvDesc.Texture2D.ResourceMinLODClamp = 0;
+		Device->CreateShaderResourceView(TexResource, &SrvDesc, TexHandle);
+	}
 }
 
 void GoodGame::BuildConstantBuffers(ID3D12GraphicsCommandList2* CommandList)
 {
 	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
-	ObjectConstantBuffer = std::make_unique< BufferUploader<ObjectConstants, 3, true>>(Device.Get());
-	
-	D3D12_CONSTANT_BUFFER_VIEW_DESC BufferDesc;
-	BufferDesc.BufferLocation = ObjectConstantBuffer->GetBuffer()->GetGPUVirtualAddress();
-	BufferDesc.SizeInBytes = ObjectConstantBuffer->GetElementSize();
+	ObjectConstantBuffer = std::make_unique< BufferUploader<ObjectConstants, true>>(Device.Get(), Renderables.size());
 
-	Device->CreateConstantBufferView(&BufferDesc, ConstantBufferHeap->GetCPUDescriptorHandleForHeapStart());
-	
-	// Another one
-	CD3DX12_CPU_DESCRIPTOR_HANDLE Handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetCPUDescriptorHandleForHeapStart());
-	UINT IncSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	Handle.Offset(1, IncSize);
-
-	D3D12_CONSTANT_BUFFER_VIEW_DESC BufferDesc2;
-	BufferDesc2.BufferLocation = ObjectConstantBuffer->GetBuffer()->GetGPUVirtualAddress() + ObjectConstantBuffer->GetElementSize();
-	BufferDesc2.SizeInBytes = ObjectConstantBuffer->GetElementSize();
-
-	Device->CreateConstantBufferView(&BufferDesc2, Handle);
-
-	// Still
-	//CD3DX12_CPU_DESCRIPTOR_HANDLE Handle2 = CD3DX12_CPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetCPUDescriptorHandleForHeapStart());
-	//UINT IncSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	CD3DX12_CPU_DESCRIPTOR_HANDLE Handle2 = CD3DX12_CPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetCPUDescriptorHandleForHeapStart());
-	Handle2.Offset(2, IncSize);
-
-	D3D12_CONSTANT_BUFFER_VIEW_DESC BufferDesc3;
-	BufferDesc3.BufferLocation = ObjectConstantBuffer->GetBuffer()->GetGPUVirtualAddress() + 2 * ObjectConstantBuffer->GetElementSize();
-	BufferDesc3.SizeInBytes = ObjectConstantBuffer->GetElementSize();
-
-	Device->CreateConstantBufferView(&BufferDesc3, Handle2);
+	const UINT HandleIncSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	for (size_t Idx = 0; Idx < Renderables.size(); Idx++)
+	{
+		CD3DX12_CPU_DESCRIPTOR_HANDLE Handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetCPUDescriptorHandleForHeapStart());
+		Handle.Offset(Idx, HandleIncSize);
+		D3D12_CONSTANT_BUFFER_VIEW_DESC BufferDesc;
+		BufferDesc.BufferLocation = ObjectConstantBuffer->GetBuffer()->GetGPUVirtualAddress() 
+			+ Idx * ObjectConstantBuffer->GetElementSize();
+		BufferDesc.SizeInBytes = ObjectConstantBuffer->GetElementSize();
+		Device->CreateConstantBufferView(&BufferDesc, Handle);
+	}
 }
 
 void GoodGame::BuildRootSignature(ID3D12GraphicsCommandList2* CommandList)
@@ -373,9 +347,7 @@ void GoodGame::BuildRootSignature(ID3D12GraphicsCommandList2* CommandList)
 	}
 
 	ThrowIfFailed(Hr);
-
 	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
-
 	ThrowIfFailed(Device->CreateRootSignature(
 		0,
 		SerializedRootSig->GetBufferPointer(),
@@ -390,16 +362,6 @@ void GoodGame::BuildShadersAndInputLayout(ID3D12GraphicsCommandList2* CommandLis
 	PixelShader = std::make_unique<Shader>(ResourceDirectory<std::wstring>::GetPath() + L"Shaders\\Meh.hlsl", 
 		nullptr, "PixelMain", "ps_5_0");
 
-	/*
-	LPCSTR SemanticName;
-    UINT SemanticIndex;
-    DXGI_FORMAT Format;
-    UINT InputSlot;
-    UINT AlignedByteOffset;
-    D3D12_INPUT_CLASSIFICATION InputSlotClass;
-    UINT InstanceDataStepRate;
-	*/
-
 	InputLayout =
 	{
 		{ "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
@@ -409,17 +371,36 @@ void GoodGame::BuildShadersAndInputLayout(ID3D12GraphicsCommandList2* CommandLis
 	};
 }
 
-void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
+void GoodGame::BuildGeometry(ID3D12GraphicsCommandList2* CommandList)
 {
 	using namespace DirectX;
 	using namespace std;
-	
+	unique_ptr<Renderable> RableBox1 = make_unique<Renderable>();
+	unique_ptr<Renderable> RableBox2 = make_unique<Renderable>();
+	unique_ptr<Renderable> RablePlane = make_unique<Renderable>();
+
+	RableBox1->SetUpdateCallback([RableRaw = RableBox1.get()](const UpdateEventArgs & EventArgs)
+	{
+		RableRaw->WorldMat = XMMatrixRotationX(EventArgs.TotalTime) * XMMatrixRotationY(std::sin(EventArgs.TotalTime))
+			* XMMatrixRotationZ(std::cos(EventArgs.TotalTime)) * XMMatrixTranslation(0.f, -3.f, 0.f);
+	});
+
+	RableBox2->SetUpdateCallback([RableRaw = RableBox2.get()](const UpdateEventArgs & EventArgs)
+	{
+		RableRaw->WorldMat = XMMatrixTranslation(0.f, 2.1f, 0.f);
+	});
+
+	RABLEUPDATECALLBACK(RablePlane,
+	{
+		Obj->WorldMat = XMMatrixScaling(10.f, 10.f, 10.f) * XMMatrixTranslation(0.f, -5.f, 0.f);
+	});
+
 	// Box!
 	BoxMeshData BoxMesh;
 	const UINT VertexBufferSize = BoxMesh.GetVerticesByteSize();
 	const UINT IndexBufferSize = BoxMesh.GetIndicesByteSize();
 
-	BoxGeometry = make_unique<MeshGeometry>();
+	shared_ptr<MeshGeometry> BoxGeometry = make_shared<MeshGeometry>();
 	BoxGeometry->Name = "boxGeometry";
 
 	ThrowIfFailed(D3DCreateBlob(VertexBufferSize, &BoxGeometry->VertexBufferCPU));
@@ -446,11 +427,22 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 	Submesh.StartIndexLocation = 0;
 	Submesh.BaseVertexLocation = 0;
 
-	BoxGeometry->DrawArgs["box"] = Submesh;
+	BoxGeometry->DrawArgs["default"] = Submesh;
 
+	RableBox1->MeshGeo = BoxGeometry;
+	RableBox2->MeshGeo = move(BoxGeometry);
+	//static const string ConstantStr = "Constant";
+	//static const string TextureStr = "Texture";
+	RableBox1->HeapIndexMap[ConstantStr] = 0;
+	RableBox1->HeapIndexMap[TextureStr] = 0;
+	
+	RableBox2->HeapIndexMap[ConstantStr] = 1;
+	RableBox2->HeapIndexMap[TextureStr] = 0;
+
+	//Rable->MeshGeo
 	// Plane!
 	PlaneMeshData PlaneMesh;
-	PlaneGeometry = make_unique<MeshGeometry>();
+	shared_ptr<MeshGeometry> PlaneGeometry = make_unique<MeshGeometry>();
 	PlaneGeometry->Name = "planeGeometry";
 
 	ThrowIfFailed(D3DCreateBlob(PlaneMesh.GetVerticesByteSize(), &PlaneGeometry->VertexBufferCPU));
@@ -475,7 +467,15 @@ void GoodGame::BuildBoxGeometry(ID3D12GraphicsCommandList2* CommandList)
 	Submesh2.StartIndexLocation = 0;
 	Submesh2.BaseVertexLocation = 0;
 
-	PlaneGeometry->DrawArgs["plane"] = Submesh2;
+	PlaneGeometry->DrawArgs["default"] = Submesh2;
+
+	RablePlane->MeshGeo = move(PlaneGeometry);
+	RablePlane->HeapIndexMap[ConstantStr] = 2;
+	RablePlane->HeapIndexMap[TextureStr] = 1;
+	// Add them to the list
+	Renderables.push_back(move(RableBox1));
+	Renderables.push_back(move(RableBox2));
+	Renderables.push_back(move(RablePlane));
 }
 
 void GoodGame::BuildPSO(ID3D12GraphicsCommandList2* CommandList)
