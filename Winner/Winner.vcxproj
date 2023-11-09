@@ -182,7 +182,6 @@
     <ClInclude Include="Shader.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Texture.h" />
-    <ClInclude Include="Tutorial2.h" />
     <ClInclude Include="UploadHelpers.h" />
     <ClInclude Include="Window.h" />
     <ClInclude Include="Winner.h" />
@@ -198,7 +197,6 @@
     <ClCompile Include="Renderable.cpp" />
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="Texture.cpp" />
-    <ClCompile Include="Tutorial2.cpp" />
     <ClCompile Include="UploadHelpers.cpp" />
     <ClCompile Include="Window.cpp" />
     <ClCompile Include="Winner.cpp" />

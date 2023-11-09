@@ -8,7 +8,6 @@
 #include <Shlwapi.h>
 
 #include "Application.h"
-#include "Tutorial2.h"
 
 #include <dxgidebug.h>
 
