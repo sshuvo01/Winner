@@ -43,6 +43,9 @@ bool GoodGame::LoadContent()
 		unique_ptr<Texture> Texture2 = std::make_unique<Texture>();
 		Texture2->Load(ResourceDirectory<std::wstring>::GetPath() + L"Textures\\Directx9.png", Device.Get(), CommandList.Get());
 
+		ComputeInput = std::make_unique<RenderTexture>();
+		ComputeOutput = std::make_unique<RenderTexture>();
+
 		Textures.push_back(move(Texture1));
 		Textures.push_back(move(Texture2));
 
@@ -217,11 +220,68 @@ void GoodGame::OnRender(RenderEventArgs & e)
 		const UINT IndexCount = Rable->MeshGeo->DrawArgs["default"].IndexCount;
 		CommandList->DrawIndexedInstanced(IndexCount, 1, 0, 0, 0);
 	}
+
+
+	{
+		CD3DX12_RESOURCE_BARRIER Yobarrier = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(),
+			D3D12_RESOURCE_STATE_RENDER_TARGET,
+			D3D12_RESOURCE_STATE_COPY_SOURCE);
+		CommandList->ResourceBarrier(1, &Yobarrier);
+
+		CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeInput->GetResource().Get(),
+			D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST));
+
+		CommandList->CopyResource(ComputeInput->GetResource().Get(), backBuffer.Get());
+		
+		CommandList->SetPipelineState(ComputePSO.Get());
+		CommandList->SetComputeRootSignature(ComputeRootSignature.Get());
+		ID3D12DescriptorHeap* ShaderResourceHeap[] = 
+		{ 
+			RenderTexture::DescHeaps[ (UINT) RenderTexture::Specification::Type::ShaderResource ].Get() 
+		};
+		
+		CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeInput->GetResource().Get(),
+			D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ));
+
+		CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeOutput->GetResource().Get(),
+			D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+
+		CommandList->SetDescriptorHeaps(_countof(ShaderResourceHeap), ShaderResourceHeap);
+		CommandList->SetComputeRootDescriptorTable(0, ComputeInput->GetGPUHandle());
+
+		ID3D12DescriptorHeap* UAHeap[] =
+		{
+			RenderTexture::DescHeaps[(UINT)RenderTexture::Specification::Type::UnorderedAccess].Get()
+		};
+
+		CommandList->SetDescriptorHeaps(_countof(UAHeap), UAHeap);
+		CommandList->SetComputeRootDescriptorTable(1, ComputeOutput->GetGPUHandle());
+
+		const UINT NumGroupsX = (UINT)ceilf((float) GetClientWidth() / 256.0f);
+		CommandList->Dispatch(NumGroupsX, GetClientHeight(), 1);
+
+		CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeOutput->GetResource().Get(),
+			D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ));
+
+
+		CD3DX12_RESOURCE_BARRIER Yobarrier2 = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(),
+			D3D12_RESOURCE_STATE_COPY_SOURCE,
+			D3D12_RESOURCE_STATE_COPY_DEST);
+		CommandList->ResourceBarrier(1, &Yobarrier2);
+
+		CommandList->CopyResource(backBuffer.Get(), ComputeOutput->GetResource().Get());
+
+		CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeInput->GetResource().Get(),
+			D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COMMON));
+
+		CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeOutput->GetResource().Get(),
+			D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COMMON));
+	}
 	
 	// Present
 	{
 		CD3DX12_RESOURCE_BARRIER Yobarrier = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(), 
-			D3D12_RESOURCE_STATE_RENDER_TARGET,
+			D3D12_RESOURCE_STATE_COPY_DEST,
 			D3D12_RESOURCE_STATE_PRESENT);
 
 		CommandList->ResourceBarrier(1, &Yobarrier);
@@ -293,6 +353,22 @@ void GoodGame::BuildShaderResrources(ID3D12GraphicsCommandList2* CommandList)
 		SrvDesc.Texture2D.ResourceMinLODClamp = 0;
 		Device->CreateShaderResourceView(TexResource, &SrvDesc, TexHandle);
 	}
+	// Compute shader input
+	RenderTexture::Specification ComputeInputSpec;
+	ComputeInputSpec.Type_ = RenderTexture::Specification::Type::ShaderResource;
+	ComputeInputSpec.Width = GetClientWidth();
+	ComputeInputSpec.Height = GetClientHeight();
+	ComputeInputSpec.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	ComputeInput->BuildResource(ComputeInputSpec, nullptr);
+	ComputeInput->BuildDescriptor();
+	// Compute shader output
+	RenderTexture::Specification ComputeOutputSpec;
+	ComputeOutputSpec.Type_ = RenderTexture::Specification::Type::UnorderedAccess;
+	ComputeOutputSpec.Width = GetClientWidth();
+	ComputeOutputSpec.Height = GetClientHeight();
+	ComputeOutputSpec.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	ComputeOutput->BuildResource(ComputeOutputSpec, nullptr);
+	ComputeOutput->BuildDescriptor();
 }
 
 void GoodGame::BuildConstantBuffers(ID3D12GraphicsCommandList2* CommandList)
@@ -353,6 +429,46 @@ void GoodGame::BuildRootSignature(ID3D12GraphicsCommandList2* CommandList)
 		SerializedRootSig->GetBufferPointer(),
 		SerializedRootSig->GetBufferSize(),
 		IID_PPV_ARGS(&RootSignature)));
+
+	BuildComputeRootSignature(CommandList);
+}
+
+void GoodGame::BuildComputeRootSignature(ID3D12GraphicsCommandList2 * CommandList)
+{
+	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
+	CD3DX12_DESCRIPTOR_RANGE SrvTable;
+	SrvTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+
+	CD3DX12_DESCRIPTOR_RANGE UavTable;
+	UavTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+
+	CD3DX12_ROOT_PARAMETER SlotRootParameter[2];
+
+	SlotRootParameter[0].InitAsDescriptorTable(1, &SrvTable);
+	SlotRootParameter[1].InitAsDescriptorTable(1, &UavTable);
+
+	// A root signature is an array of root parameters.
+	CD3DX12_ROOT_SIGNATURE_DESC RootSigDesc(2, SlotRootParameter,
+		0, nullptr,
+		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
+
+	// Create a root signature with a single slot which points to a descriptor range consisting of a single constant buffer
+	WRLComPtr<ID3DBlob> SerializedRootSig = nullptr;
+	WRLComPtr<ID3DBlob> ErrorBlob = nullptr;
+	HRESULT hr = D3D12SerializeRootSignature(&RootSigDesc, D3D_ROOT_SIGNATURE_VERSION_1,
+		SerializedRootSig.GetAddressOf(), ErrorBlob.GetAddressOf());
+
+	if (ErrorBlob != nullptr)
+	{
+		::OutputDebugStringA((char*)ErrorBlob->GetBufferPointer());
+	}
+	ThrowIfFailed(hr);
+
+	ThrowIfFailed(Device->CreateRootSignature(
+		0,
+		SerializedRootSig->GetBufferPointer(),
+		SerializedRootSig->GetBufferSize(),
+		IID_PPV_ARGS(ComputeRootSignature.GetAddressOf())));
 }
 
 void GoodGame::BuildShadersAndInputLayout(ID3D12GraphicsCommandList2* CommandList)
@@ -361,6 +477,8 @@ void GoodGame::BuildShadersAndInputLayout(ID3D12GraphicsCommandList2* CommandLis
 		nullptr, "VertexMain", "vs_5_0");
 	PixelShader = std::make_unique<Shader>(ResourceDirectory<std::wstring>::GetPath() + L"Shaders\\Meh.hlsl", 
 		nullptr, "PixelMain", "ps_5_0");
+	ComputeShader = std::make_unique<Shader>(ResourceDirectory<std::wstring>::GetPath() + L"Shaders\\MehCompute.hlsl",
+		nullptr, "PostProcessCS", "cs_5_0");
 
 	InputLayout =
 	{
@@ -509,6 +627,18 @@ void GoodGame::BuildPSO(ID3D12GraphicsCommandList2* CommandList)
 
 	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
 	ThrowIfFailed(Device->CreateGraphicsPipelineState(&PSODesc, IID_PPV_ARGS(&PSO)));
+
+	// ---------- Compute ------------- //
+	D3D12_COMPUTE_PIPELINE_STATE_DESC ComputePSODesc = {};
+	ComputePSODesc.pRootSignature = ComputeRootSignature.Get();
+	ComputePSODesc.CS =
+	{
+		reinterpret_cast<BYTE*>(ComputeShader->GetByteCode()->GetBufferPointer()),
+		ComputeShader->GetByteCode()->GetBufferSize()
+	};
+
+	ComputePSODesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
+	ThrowIfFailed(Device->CreateComputePipelineState(&ComputePSODesc, IID_PPV_ARGS(&ComputePSO)));
 }
 
 std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GoodGame::GetStaticSamplers()

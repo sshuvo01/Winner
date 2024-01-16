@@ -40,7 +40,6 @@ Window::Window(HWND hWnd, const std::wstring& windowName, int clientWidth, int c
 	m_IsTearingSupported = app.IsTearingSupported();
 
 	m_dxgiSwapChain = CreateSwapChain();
-	m_d3d12RTVDescriptorHeap = app.CreateDescriptorHeap(BufferCount, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	m_RTVDescriptorSize = app.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 	UpdateRenderTargetViews();
@@ -50,6 +49,7 @@ Window::~Window()
 {
 	// Window should be destroyed with Application::DestroyWindow before
 	// the window goes out of scope.
+	RenderTexture::ReleaseHeaps(); // TODO: Find a better way to do this
 	assert(!m_hWnd && "Use Application::DestroyWindow before destruction.");
 }
 
@@ -274,7 +274,7 @@ void Window::OnResize(ResizeEventArgs& e)
 
 		for (int i = 0; i < BufferCount; ++i)
 		{
-			m_d3d12BackBuffers[i].Reset();
+			BackBuffers[i].GetResource().Reset();
 		}
 
 		DXGI_SWAP_CHAIN_DESC swapChainDesc = {};
@@ -346,30 +346,28 @@ void Window::UpdateRenderTargetViews()
 {
 	auto device = Application::Get().GetDevice();
 
-	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_d3d12RTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+	RenderTexture::Specification RenderTargetSpec;
+	RenderTargetSpec.Type_ = RenderTexture::Specification::Type::RenderTarget;
 
 	for (int i = 0; i < BufferCount; ++i)
 	{
 		ComPtr<ID3D12Resource> backBuffer;
 		ThrowIfFailed(m_dxgiSwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)));
+		
 
-		device->CreateRenderTargetView(backBuffer.Get(), nullptr, rtvHandle);
-
-		m_d3d12BackBuffers[i] = backBuffer;
-
-		rtvHandle.Offset(m_RTVDescriptorSize);
+		BackBuffers[i].BuildResource(RenderTargetSpec, backBuffer.Get());
+		BackBuffers[i].BuildDescriptor();
 	}
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE Window::GetCurrentRenderTargetView() const
 {
-	return CD3DX12_CPU_DESCRIPTOR_HANDLE(m_d3d12RTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart(),
-		m_CurrentBackBufferIndex, m_RTVDescriptorSize);
+	return BackBuffers[m_CurrentBackBufferIndex].GetCPUHandle();
 }
 
 Microsoft::WRL::ComPtr<ID3D12Resource> Window::GetCurrentBackBuffer() const
 {
-	return m_d3d12BackBuffers[m_CurrentBackBufferIndex];
+	return BackBuffers[m_CurrentBackBufferIndex].GetResource();
 }
 
 UINT Window::GetCurrentBackBufferIndex() const

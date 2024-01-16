@@ -68,6 +68,12 @@ template<typename T>
 using CRef = const T&;
 
 #define ASSERTNOENTRY(Msg) assert(false && Msg)
+#define ASSERTBREAK(Cond)           \
+	do                              \
+	{                               \
+        if(!Cond) __debugbreak();   \
+	} while (false)
+
 
 class NonCopyable
 {

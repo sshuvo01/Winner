@@ -346,12 +346,13 @@ void Application::Flush()
 	m_CopyCommandQueue->Flush();
 }
 
-Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Application::CreateDescriptorHeap(UINT numDescriptors, D3D12_DESCRIPTOR_HEAP_TYPE type)
+Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> Application::CreateDescriptorHeap(UINT numDescriptors, D3D12_DESCRIPTOR_HEAP_TYPE type,
+	D3D12_DESCRIPTOR_HEAP_FLAGS inFlags /* = D3D12_DESCRIPTOR_HEAP_FLAG_NONE */)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
 	desc.Type = type;
 	desc.NumDescriptors = numDescriptors;
-	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	desc.Flags = inFlags;
 	desc.NodeMask = 0;
 
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> descriptorHeap;

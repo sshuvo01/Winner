@@ -72,15 +72,18 @@ private:
 	void BuildShaderResrources(ID3D12GraphicsCommandList2* CommandList);
 	void BuildConstantBuffers(ID3D12GraphicsCommandList2* CommandList);
 	void BuildRootSignature(ID3D12GraphicsCommandList2* CommandList);
+	void BuildComputeRootSignature(ID3D12GraphicsCommandList2* CommandList);
 	void BuildShadersAndInputLayout(ID3D12GraphicsCommandList2* CommandList);
 	void BuildGeometry(ID3D12GraphicsCommandList2* CommandList);
 	void BuildPSO(ID3D12GraphicsCommandList2* CommandList);
 	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
 
-	WRLComPtr<ID3D12RootSignature> RootSignature;
-	WRLComPtr<ID3D12PipelineState> PSO;
+	WRLComPtr<ID3D12RootSignature> RootSignature, ComputeRootSignature;
+	WRLComPtr<ID3D12PipelineState> PSO, ComputePSO;
 	std::unique_ptr < BufferUploader<ObjectConstants, true> > ObjectConstantBuffer;
-	std::unique_ptr< Shader > VertexShader, PixelShader;
+	std::unique_ptr< Shader > VertexShader, PixelShader, ComputeShader;
+	std::unique_ptr<class RenderTexture> ComputeInput, ComputeOutput;
+
 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> InputLayout;
 	//std::shared_ptr<MeshGeometry> BoxGeometry;

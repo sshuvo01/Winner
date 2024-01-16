@@ -31,6 +31,7 @@
 
 #include "Events.h"
 #include "HighResolutionClock.h"
+#include "RenderTexture.h"
 
 // Forward-declare the DirectXTemplate class.
 class Game;
@@ -170,8 +171,7 @@ private:
 	std::weak_ptr<Game> m_pGame;
 
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> m_dxgiSwapChain;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_d3d12RTVDescriptorHeap;
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_d3d12BackBuffers[BufferCount];
+	RenderTexture BackBuffers[BufferCount];
 
 	UINT m_RTVDescriptorSize;
 	UINT m_CurrentBackBufferIndex;
