@@ -74,6 +74,6 @@ private:
 	WRLComPtr<ID3D12Resource> UploadBuffer;
 	UINT ElementSize = 0;
 	const bool IsConstant = _Constant;
-	const UINT64 ElementCount = _ElementCount;
+	const UINT64 ElementCount;
 };
 
