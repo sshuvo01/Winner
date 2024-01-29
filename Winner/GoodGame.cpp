@@ -170,6 +170,7 @@ void GoodGame::OnUpdate(UpdateEventArgs & e)
 
 void GoodGame::OnRender(RenderEventArgs & e)
 {
+	//std::cout << "On Render" << std::endl;
 	Game::OnRender(e);
 
 	auto CommandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
