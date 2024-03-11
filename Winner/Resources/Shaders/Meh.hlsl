@@ -1,17 +1,9 @@
 #pragma pack_matrix( row_major )
+#include "Core.hlsl"
 
 Texture2D    gDiffuseMap : register(t0);
-SamplerState gSampler  : register(s0);
+Texture2D    gDiffuseMap2 : register(t1);
 
-
-cbuffer CBPerObject : register(b0)
-{
-	float3 gLightDir;
-	float padding;
-	float4x4 gWorld;
-	float4x4 gWorldViewProj;
-}
- 
 struct VertexIn
 {
 	float3 PositionL : POSITION;
@@ -48,7 +40,7 @@ VertexOut VertexMain(VertexIn Vin)
 float4 PixelMain(VertexOut Pin) : SV_Target
 {
 	//float4 diffuseAlbedo = gDiffuseMap.Sample(gSampler, float2(0.345, 0.2));
-	float4 DiffuseAlbedo = gDiffuseMap.Sample(gSampler, Pin.Tex);
+    float4 DiffuseAlbedo = (gDiffuseMap2.Sample(gSampler, Pin.Tex) + gDiffuseMap.Sample(gSampler, Pin.Tex)) / 2.f;
 	//return diffuseAlbedo;
 	//return float4(abs(Pin.Normal.x), abs(Pin.Normal.y), abs(Pin.Normal.z), 1.f);
 	//return float4(gLightDir, 1.f);

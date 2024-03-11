@@ -184,6 +184,7 @@
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Texture.h" />
     <ClInclude Include="UploadHelpers.h" />
+    <ClInclude Include="Voxelizer.h" />
     <ClInclude Include="Window.h" />
     <ClInclude Include="Winner.h" />
   </ItemGroup>
@@ -200,6 +201,7 @@
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="UploadHelpers.cpp" />
+    <ClCompile Include="Voxelizer.cpp" />
     <ClCompile Include="Window.cpp" />
     <ClCompile Include="Winner.cpp" />
   </ItemGroup>

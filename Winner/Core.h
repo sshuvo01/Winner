@@ -6,6 +6,7 @@
 #include <cassert>
 #include <DirectXMath.h>
 #include <vector>
+#include <array>
 #include <sstream>
 #include "d3dx12.h"
 #include "Helpers.h"
@@ -71,7 +72,7 @@ using CRef = const T&;
 #define ASSERTBREAK(Cond)           \
 	do                              \
 	{                               \
-        if(!Cond) __debugbreak();   \
+        if(!(Cond)) __debugbreak();   \
 	} while (false)
 
 
@@ -130,6 +131,8 @@ public:
 
 		return I;
 	}
+
+	static std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetCommonStaticSamplers();
 
 	constexpr static float PI = 3.1415926535f;
 

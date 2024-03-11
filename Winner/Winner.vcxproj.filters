@@ -81,6 +81,9 @@
     <ClInclude Include="RenderTexture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Voxelizer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Winner.cpp">
@@ -123,6 +126,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="RenderTexture.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Voxelizer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

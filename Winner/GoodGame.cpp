@@ -4,6 +4,7 @@
 #include "Application.h"
 #include "CommandQueue.h"
 #include "Window.h"
+#include "Voxelizer.h"
 
 #include <DirectXTex/DirectXTex/DirectXTex.h>
 #include <d3dcompiler.h>
@@ -56,7 +57,7 @@ bool GoodGame::LoadContent()
 		BuildRootSignature(CommandList.Get());
 		BuildShadersAndInputLayout(CommandList.Get());
 		BuildPSO(CommandList.Get());
-
+		BuildVoxelizer(CommandList.Get());
 		bLoadedContent = true; // ?
 
 		// Create the descriptor heap for the depth-stencil view.
@@ -104,7 +105,7 @@ void GoodGame::OnUpdate(UpdateEventArgs & e)
 	using namespace std;
 
 	// Build the view matrix.
-	DirectX::XMVECTOR pos = DirectX::XMVectorSet(5.f, 6.f, 3.f, 1.f);
+	/*DirectX::XMVECTOR pos = DirectX::XMVectorSet(5.f, 6.f, 3.f, 1.f);
 	DirectX::XMVECTOR target = DirectX::XMVectorZero();
 	DirectX::XMVECTOR up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
@@ -112,16 +113,18 @@ void GoodGame::OnUpdate(UpdateEventArgs & e)
 	XMStoreFloat4x4(&ViewMat, View);
 	XMMATRIX proj = XMLoadFloat4x4(&ProjectionMat);
 
-	DirectX::XMFLOAT3 LightDirection = { -2.0f, -3.707f, -1.707f };
+	DirectX::XMFLOAT3 LightDirection = { -2.0f, -3.707f, -1.707f };*/
 	for (const auto& Rable : Renderables)
 	{
 		Rable->Update(e);
+		/*
 		XMMATRIX WorldViewProj = Rable->WorldMat * View * proj;
 		ObjectConstants ObjConstants;
 		XMStoreFloat4x4(&ObjConstants.WorldViewProj, WorldViewProj);
 		XMStoreFloat4x4(&ObjConstants.World, Rable->WorldMat);
 		ObjConstants.LightDir = LightDirection;
 		ObjectConstantBuffer->CopyData(&ObjConstants, Rable->HeapIndexMap[ConstantStr]);
+		*/
 	}
 
 	// Update the constant buffer with the latest worldViewProj matrix.
@@ -172,9 +175,11 @@ void GoodGame::OnRender(RenderEventArgs & e)
 {
 	//std::cout << "On Render" << std::endl;
 	Game::OnRender(e);
-
 	auto CommandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
 	WRLComPtr<ID3D12GraphicsCommandList2> CommandList = CommandQueue->GetCommandList();
+	//DoVoxelizerPass(CommandList.Get());
+
+	//DoVexelizerPass
 
 	UINT CurrentBackBufferIndex = m_pWindow->GetCurrentBackBufferIndex();
 	Microsoft::WRL::ComPtr<ID3D12Resource> backBuffer = m_pWindow->GetCurrentBackBuffer();
@@ -198,7 +203,31 @@ void GoodGame::OnRender(RenderEventArgs & e)
 	CommandList->RSSetViewports(1, &Viewport);
 	CommandList->RSSetScissorRects(1, &ScissorRect);
 	CommandList->OMSetRenderTargets(1, &Rtv, FALSE, &Dsv);
+	//
+	// Build the view matrix.
+	using namespace DirectX;
+	XMVECTOR Pos = DirectX::XMVectorSet(5.f, 6.f, 3.f, 1.f);
+	XMVECTOR Target = DirectX::XMVectorZero();
+	XMVECTOR Up = DirectX::XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
 
+	DirectX::XMMATRIX View = XMMatrixLookAtLH(Pos, Target, Up);
+	DirectX::XMStoreFloat4x4(&ViewMat, View);
+	XMMATRIX Proj = XMLoadFloat4x4(&ProjectionMat);
+
+	DirectX::XMFLOAT3 LightDirection = { -2.0f, -3.707f, -1.707f };
+	for (const auto& Rable : Renderables)
+	{
+		
+		
+		XMMATRIX WorldViewProj = Rable->WorldMat * View * Proj;
+		ObjectConstants ObjConstants;
+		XMStoreFloat4x4(&ObjConstants.WorldViewProj, WorldViewProj);
+		XMStoreFloat4x4(&ObjConstants.World, Rable->WorldMat);
+		ObjConstants.LightDir = LightDirection;
+		ObjectConstantBuffer->CopyData(&ObjConstants, Rable->HeapIndexMap[ConstantStr]);
+		
+	}
+	//
 	for (const auto& Rable : Renderables)
 	{
 		CommandList->IASetVertexBuffers(0, 1, &Rable->MeshGeo->GetVertexBufferView());
@@ -318,7 +347,7 @@ void GoodGame::OnResize(ResizeEventArgs & e)
 void GoodGame::BuildDescriptorHeaps(ID3D12GraphicsCommandList2* CommandList)
 {
 	D3D12_DESCRIPTOR_HEAP_DESC CbvHeapDesc;
-	CbvHeapDesc.NumDescriptors = 3;
+	CbvHeapDesc.NumDescriptors = Renderables.size() + MeshVoxelizer::GetConstantBufferCount();
 	CbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	CbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	CbvHeapDesc.NodeMask = 0;
@@ -329,7 +358,7 @@ void GoodGame::BuildDescriptorHeaps(ID3D12GraphicsCommandList2* CommandList)
 
 	// Shader resource view... textures
 	D3D12_DESCRIPTOR_HEAP_DESC SrvHeapDesc = {};
-	SrvHeapDesc.NumDescriptors = Textures.size();
+	SrvHeapDesc.NumDescriptors = Textures.size() + MeshVoxelizer::GeUAVSRVCount();
 	SrvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	SrvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	ThrowIfFailed(Device->CreateDescriptorHeap(&SrvHeapDesc, IID_PPV_ARGS(SrvDescriptorHeap.GetAddressOf())));
@@ -400,7 +429,7 @@ void GoodGame::BuildRootSignature(ID3D12GraphicsCommandList2* CommandList)
 	RootParameter[0].InitAsDescriptorTable(1, &CbvTable);
 	
 	CD3DX12_DESCRIPTOR_RANGE TexTable;
-	TexTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+	TexTable.Init(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 2, 0);
 	RootParameter[1].InitAsDescriptorTable(1, &TexTable, D3D12_SHADER_VISIBILITY_PIXEL);
 	/*
 		UINT numParameters,
@@ -409,7 +438,7 @@ void GoodGame::BuildRootSignature(ID3D12GraphicsCommandList2* CommandList)
         _In_reads_opt_(numStaticSamplers) const D3D12_STATIC_SAMPLER_DESC* _pStaticSamplers = NULL,
         D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_NONE)
 	*/
-	auto StaticSamp = GetStaticSamplers();
+	auto StaticSamp = Useful::GetCommonStaticSamplers();
 	CD3DX12_ROOT_SIGNATURE_DESC RootSigDesc(2, RootParameter, 
 		StaticSamp.size(), StaticSamp.data(), D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT);
 
@@ -490,21 +519,27 @@ void GoodGame::BuildShadersAndInputLayout(ID3D12GraphicsCommandList2* CommandLis
 	};
 }
 
+std::unique_ptr<Renderable> RableBox1;// = make_unique<Renderable>();
+//std::unique_ptr<Renderable> RableBox2;// = make_unique<Renderable>();
+//std::unique_ptr<Renderable> RablePlane;
+
 void GoodGame::BuildGeometry(ID3D12GraphicsCommandList2* CommandList)
 {
 	using namespace DirectX;
 	using namespace std;
-	unique_ptr<Renderable> RableBox1 = make_unique<Renderable>();
-	unique_ptr<Renderable> RableBox2 = make_unique<Renderable>();
-	unique_ptr<Renderable> RablePlane = make_unique<Renderable>();
+	 RableBox1 = make_unique<Renderable>();
+	// RableBox2 = make_unique<Renderable>();
+	// RablePlane = make_unique<Renderable>();
 
 	RableBox1->SetUpdateCallback([RableRaw = RableBox1.get()](const UpdateEventArgs & EventArgs)
 	{
-		RableRaw->WorldMat = XMMatrixRotationX(EventArgs.TotalTime) * XMMatrixRotationY(std::sin(EventArgs.TotalTime))
-			* XMMatrixRotationZ(std::cos(EventArgs.TotalTime)) * XMMatrixTranslation(0.f, -3.f, 0.f);
+		/*RableRaw->WorldMat = XMMatrixRotationX(EventArgs.TotalTime) * XMMatrixRotationY(std::sin(EventArgs.TotalTime))
+			* XMMatrixRotationZ(std::cos(EventArgs.TotalTime)) * XMMatrixTranslation(0.f, -3.f, 0.f);*/
+
+		RableRaw->WorldMat = XMMatrixTranslation(0.f, -3.f, 0.f);
 	});
 
-	RableBox2->SetUpdateCallback([RableRaw = RableBox2.get()](const UpdateEventArgs & EventArgs)
+	/*RableBox2->SetUpdateCallback([RableRaw = RableBox2.get()](const UpdateEventArgs & EventArgs)
 	{
 		RableRaw->WorldMat = XMMatrixTranslation(0.f, 2.1f, 0.f);
 	});
@@ -512,7 +547,7 @@ void GoodGame::BuildGeometry(ID3D12GraphicsCommandList2* CommandList)
 	RABLEUPDATECALLBACK(RablePlane,
 	{
 		Obj->WorldMat = XMMatrixScaling(10.f, 10.f, 10.f) * XMMatrixTranslation(0.f, -5.f, 0.f);
-	});
+	});*/
 
 	// Box!
 	BoxMeshData BoxMesh;
@@ -549,18 +584,18 @@ void GoodGame::BuildGeometry(ID3D12GraphicsCommandList2* CommandList)
 	BoxGeometry->DrawArgs["default"] = Submesh;
 
 	RableBox1->MeshGeo = BoxGeometry;
-	RableBox2->MeshGeo = move(BoxGeometry);
+	//RableBox2->MeshGeo = move(BoxGeometry);
 	//static const string ConstantStr = "Constant";
 	//static const string TextureStr = "Texture";
 	RableBox1->HeapIndexMap[ConstantStr] = 0;
 	RableBox1->HeapIndexMap[TextureStr] = 0;
 	
-	RableBox2->HeapIndexMap[ConstantStr] = 1;
-	RableBox2->HeapIndexMap[TextureStr] = 0;
-
+	//RableBox2->HeapIndexMap[ConstantStr] = 1;
+	//RableBox2->HeapIndexMap[TextureStr] = 0;
+	//
 	//Rable->MeshGeo
 	// Plane!
-	PlaneMeshData PlaneMesh;
+	/*PlaneMeshData PlaneMesh;
 	shared_ptr<MeshGeometry> PlaneGeometry = make_unique<MeshGeometry>();
 	PlaneGeometry->Name = "planeGeometry";
 
@@ -586,15 +621,15 @@ void GoodGame::BuildGeometry(ID3D12GraphicsCommandList2* CommandList)
 	Submesh2.StartIndexLocation = 0;
 	Submesh2.BaseVertexLocation = 0;
 
-	PlaneGeometry->DrawArgs["default"] = Submesh2;
+	PlaneGeometry->DrawArgs["default"] = Submesh2;*/
 
-	RablePlane->MeshGeo = move(PlaneGeometry);
-	RablePlane->HeapIndexMap[ConstantStr] = 2;
-	RablePlane->HeapIndexMap[TextureStr] = 1;
+	//RablePlane->MeshGeo = move(PlaneGeometry);
+	//RablePlane->HeapIndexMap[ConstantStr] = 2;
+	//RablePlane->HeapIndexMap[TextureStr] = 0;
 	// Add them to the list
 	Renderables.push_back(move(RableBox1));
-	Renderables.push_back(move(RableBox2));
-	Renderables.push_back(move(RablePlane));
+	//Renderables.push_back(move(RableBox2));
+	//Renderables.push_back(move(RablePlane));
 }
 
 void GoodGame::BuildPSO(ID3D12GraphicsCommandList2* CommandList)
@@ -642,62 +677,212 @@ void GoodGame::BuildPSO(ID3D12GraphicsCommandList2* CommandList)
 	ThrowIfFailed(Device->CreateComputePipelineState(&ComputePSODesc, IID_PPV_ARGS(&ComputePSO)));
 }
 
-std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GoodGame::GetStaticSamplers()
+void GoodGame::BuildVoxelizer(ID3D12GraphicsCommandList2* CommandList)
 {
-	// Applications usually only need a handful of samplers.  So just define them all up front
-	// and keep them available as part of the root signature.  
-
-	const CD3DX12_STATIC_SAMPLER_DESC pointWrap(
-		0, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC pointClamp(
-		1, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC linearWrap(
-		2, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC linearClamp(
-		3, // shaderRegister
-		D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
-
-	const CD3DX12_STATIC_SAMPLER_DESC anisotropicWrap(
-		4, // shaderRegister
-		D3D12_FILTER_ANISOTROPIC, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressW
-		0.0f,                             // mipLODBias
-		8);                               // maxAnisotropy
-
-	const CD3DX12_STATIC_SAMPLER_DESC anisotropicClamp(
-		5, // shaderRegister
-		D3D12_FILTER_ANISOTROPIC, // filter
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
-		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressW
-		0.0f,                              // mipLODBias
-		8);                                // maxAnisotropy
-
-	return {
-		pointWrap, pointClamp,
-		linearWrap, linearClamp,
-		anisotropicWrap, anisotropicClamp };
+	VoxelCoord Res = { 100, 100, 100 };
+	MeshVoxelizer::Specification VoxelSpec;
+	VoxelSpec.TextureSize = Res;
+	VoxelSpec.InputLayout = &InputLayout;
+	VoxelSpec.SceneExtent = 100.f;
+	VoxelSpec.ConstBufferOffset = static_cast<INT>(Renderables.size());
+	VoxelSpec.CommandList = CommandList;
+	VoxelSpec.ConstantBufferHeap = ConstantBufferHeap.Get();
+	VoxelSpec.UAVSRVHeap = SrvDescriptorHeap.Get();
+	VoxelSpec.UAVSRVOffset = Textures.size();
+	MeshVoxelizer_ = std::make_unique<MeshVoxelizer>(VoxelSpec);
 }
+// Monke
+void GoodGame::DoVoxelizerPass(ID3D12GraphicsCommandList2* CommandList)
+{
+	using namespace DirectX;
+	ASSERTBREAK(MeshVoxelizer_);
+	const VoxelCoord Size = MeshVoxelizer_->GetTextureDimension();
+	CommandList->SetPipelineState(MeshVoxelizer_->GetVoxelizeRestPSO());
+	CommandList->SetComputeRootSignature(MeshVoxelizer_->GetVoxelizeResetRootSignature());
+	ID3D12DescriptorHeap* UAVHeap[] =
+	{
+		SrvDescriptorHeap.Get()
+	};
+	CommandList->SetDescriptorHeaps(_countof(UAVHeap), UAVHeap);
+	CommandList->SetComputeRootDescriptorTable(0, MeshVoxelizer_->GetAlbedoTexture()->GetUAVHandleGPU());
+
+	CommandList->Dispatch(std::ceil(Size.X / 8.f), std::ceil(Size.Y / 8.f), std::ceil(Size.Z / 8.f));
+
+	// Now we voxelize
+	CommandList->SetPipelineState(MeshVoxelizer_->GetVoxelizePSO());
+	CommandList->SetGraphicsRootSignature(MeshVoxelizer_->GetVoxelizeRootSignature());
+
+	CommandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	CommandList->RSSetViewports(1, &MeshVoxelizer_->GetViewport());
+	CommandList->RSSetScissorRects(1, &MeshVoxelizer_->GetScissorRect());
+	CommandList->OMSetRenderTargets(0, nullptr, FALSE, nullptr);
+
+	CommandList->SetDescriptorHeaps(_countof(UAVHeap), UAVHeap);
+	CommandList->SetGraphicsRootDescriptorTable(4, MeshVoxelizer_->GetAlbedoTexture()->GetUAVHandleGPU());
+	ID3D12DescriptorHeap* ConstantHeaps[] = { ConstantBufferHeap.Get() };
+	CommandList->SetDescriptorHeaps(_countof(ConstantHeaps), ConstantHeaps);
+
+	CommandList->SetGraphicsRootDescriptorTable(2, MeshVoxelizer_->GetConstHandleGPU());
+	const MeshVoxelizerData VoxelDat = MeshVoxelizer_->GetUniformData();
+	for (const auto& Rable : Renderables)
+	{
+		XMMATRIX View = XMLoadFloat4x4(&VoxelDat.VoxelView);
+		XMMATRIX Proj = XMLoadFloat4x4(&VoxelDat.VoxelProj);
+		XMMATRIX WorldViewProj = Rable->WorldMat * View * Proj;
+
+		ObjectConstants ObjConstants;
+		XMStoreFloat4x4(&ObjConstants.WorldViewProj, WorldViewProj);
+		XMStoreFloat4x4(&ObjConstants.World, Rable->WorldMat);
+		ObjConstants.LightDir = XMFLOAT3(0.f, 1.f, 0.f); // TODO: correct light direction later
+		ObjectConstantBuffer->CopyData(&ObjConstants, Rable->HeapIndexMap[ConstantStr]);
+
+		CommandList->IASetVertexBuffers(0, 1, &Rable->MeshGeo->GetVertexBufferView());
+		CommandList->IASetIndexBuffer(&Rable->MeshGeo->GetIndexBufferView());
+
+		ID3D12DescriptorHeap* ConstantHeaps[] = { ConstantBufferHeap.Get() };
+		CommandList->SetDescriptorHeaps(_countof(ConstantHeaps), ConstantHeaps);
+		CD3DX12_GPU_DESCRIPTOR_HANDLE CBHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
+		CBHandle.Offset(Rable->HeapIndexMap[ConstantStr],
+			Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+		CommandList->SetGraphicsRootDescriptorTable(0, CBHandle);
+
+		ID3D12DescriptorHeap** ShaderResourceHeap = SrvDescriptorHeap.GetAddressOf();
+		CommandList->SetDescriptorHeaps(1, ShaderResourceHeap);
+		CD3DX12_GPU_DESCRIPTOR_HANDLE SrvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(SrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
+		SrvHandle.Offset(Rable->HeapIndexMap[TextureStr],
+			Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+		CommandList->SetGraphicsRootDescriptorTable(3, SrvHandle);
+
+		const UINT IndexCount = Rable->MeshGeo->DrawArgs["default"].IndexCount;
+		CommandList->DrawIndexedInstanced(IndexCount, 1, 0, 0, 0);
+	}
+	// not
+
+	//{
+	//	CD3DX12_RESOURCE_BARRIER Yobarrier = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(),
+	//		D3D12_RESOURCE_STATE_RENDER_TARGET,
+	//		D3D12_RESOURCE_STATE_COPY_SOURCE);
+	//	CommandList->ResourceBarrier(1, &Yobarrier);
+
+	//	CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeInput->GetResource().Get(),
+	//		D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_DEST));
+
+	//	CommandList->CopyResource(ComputeInput->GetResource().Get(), backBuffer.Get());
+
+	//	CommandList->SetPipelineState(ComputePSO.Get());
+	//	CommandList->SetComputeRootSignature(ComputeRootSignature.Get());
+	//	ID3D12DescriptorHeap* ShaderResourceHeap[] =
+	//	{
+	//		RenderTexture::DescHeaps[(UINT)RenderTexture::Specification::Type::ShaderResource].Get()
+	//	};
+
+	//	CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeInput->GetResource().Get(),
+	//		D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_GENERIC_READ));
+
+	//	CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeOutput->GetResource().Get(),
+	//		D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_UNORDERED_ACCESS));
+
+	//	CommandList->SetDescriptorHeaps(_countof(ShaderResourceHeap), ShaderResourceHeap);
+	//	CommandList->SetComputeRootDescriptorTable(0, ComputeInput->GetGPUHandle());
+
+	//	ID3D12DescriptorHeap* UAHeap[] =
+	//	{
+	//		RenderTexture::DescHeaps[(UINT)RenderTexture::Specification::Type::UnorderedAccess].Get()
+	//	};
+
+	//	CommandList->SetDescriptorHeaps(_countof(UAHeap), UAHeap);
+	//	CommandList->SetComputeRootDescriptorTable(1, ComputeOutput->GetGPUHandle());
+
+	//	const UINT NumGroupsX = (UINT)ceilf((float)GetClientWidth() / 256.0f);
+	//	CommandList->Dispatch(NumGroupsX, GetClientHeight(), 1);
+
+	//	CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeOutput->GetResource().Get(),
+	//		D3D12_RESOURCE_STATE_UNORDERED_ACCESS, D3D12_RESOURCE_STATE_GENERIC_READ));
+
+
+	//	CD3DX12_RESOURCE_BARRIER Yobarrier2 = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(),
+	//		D3D12_RESOURCE_STATE_COPY_SOURCE,
+	//		D3D12_RESOURCE_STATE_COPY_DEST);
+	//	CommandList->ResourceBarrier(1, &Yobarrier2);
+
+	//	CommandList->CopyResource(backBuffer.Get(), ComputeOutput->GetResource().Get());
+
+	//	CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeInput->GetResource().Get(),
+	//		D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COMMON));
+
+	//	CommandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(ComputeOutput->GetResource().Get(),
+	//		D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_STATE_COMMON));
+	//}
+
+	//// Present
+	//{
+	//	CD3DX12_RESOURCE_BARRIER Yobarrier = CD3DX12_RESOURCE_BARRIER::Transition(backBuffer.Get(),
+	//		D3D12_RESOURCE_STATE_COPY_DEST,
+	//		D3D12_RESOURCE_STATE_PRESENT);
+
+	//	CommandList->ResourceBarrier(1, &Yobarrier);
+	//	FenceValues[CurrentBackBufferIndex] = CommandQueue->ExecuteCommandList(CommandList);
+	//	CurrentBackBufferIndex = m_pWindow->Present();
+	//	CommandQueue->WaitForFenceValue(FenceValues[CurrentBackBufferIndex]);
+	//}
+}
+
+//std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GoodGame::GetStaticSamplers()
+//{
+//	// Applications usually only need a handful of samplers.  So just define them all up front
+//	// and keep them available as part of the root signature.  
+//
+//	const CD3DX12_STATIC_SAMPLER_DESC pointWrap(
+//		0, // shaderRegister
+//		D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
+//		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
+//		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
+//		D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
+//
+//	const CD3DX12_STATIC_SAMPLER_DESC pointClamp(
+//		1, // shaderRegister
+//		D3D12_FILTER_MIN_MAG_MIP_POINT, // filter
+//		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
+//		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
+//		D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
+//
+//	const CD3DX12_STATIC_SAMPLER_DESC linearWrap(
+//		2, // shaderRegister
+//		D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
+//		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
+//		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
+//		D3D12_TEXTURE_ADDRESS_MODE_WRAP); // addressW
+//
+//	const CD3DX12_STATIC_SAMPLER_DESC linearClamp(
+//		3, // shaderRegister
+//		D3D12_FILTER_MIN_MAG_MIP_LINEAR, // filter
+//		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
+//		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
+//		D3D12_TEXTURE_ADDRESS_MODE_CLAMP); // addressW
+//
+//	const CD3DX12_STATIC_SAMPLER_DESC anisotropicWrap(
+//		4, // shaderRegister
+//		D3D12_FILTER_ANISOTROPIC, // filter
+//		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressU
+//		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressV
+//		D3D12_TEXTURE_ADDRESS_MODE_WRAP,  // addressW
+//		0.0f,                             // mipLODBias
+//		8);                               // maxAnisotropy
+//
+//	const CD3DX12_STATIC_SAMPLER_DESC anisotropicClamp(
+//		5, // shaderRegister
+//		D3D12_FILTER_ANISOTROPIC, // filter
+//		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressU
+//		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressV
+//		D3D12_TEXTURE_ADDRESS_MODE_CLAMP,  // addressW
+//		0.0f,                              // mipLODBias
+//		8);                                // maxAnisotropy
+//
+//	return {
+//		pointWrap, pointClamp,
+//		linearWrap, linearClamp,
+//		anisotropicWrap, anisotropicClamp };
+//}
 
 void GoodGame::ResizeDepthBuffer(int Width, int Height)
 {

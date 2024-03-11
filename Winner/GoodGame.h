@@ -10,6 +10,7 @@
 #include "UploadHelpers.h"
 #include "Texture.h"
 #include "Renderable.h"
+#include "Voxelizer.h"
 
 struct ObjectConstants
 {
@@ -76,7 +77,9 @@ private:
 	void BuildShadersAndInputLayout(ID3D12GraphicsCommandList2* CommandList);
 	void BuildGeometry(ID3D12GraphicsCommandList2* CommandList);
 	void BuildPSO(ID3D12GraphicsCommandList2* CommandList);
-	std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
+	void BuildVoxelizer(ID3D12GraphicsCommandList2* CommandList);
+	void DoVoxelizerPass(ID3D12GraphicsCommandList2* CommandList);
+	//std::array<const CD3DX12_STATIC_SAMPLER_DESC, 6> GetStaticSamplers();
 
 	WRLComPtr<ID3D12RootSignature> RootSignature, ComputeRootSignature;
 	WRLComPtr<ID3D12PipelineState> PSO, ComputePSO;
@@ -107,5 +110,8 @@ private:
 
 	static constexpr const char* ConstantStr = "Constant";
 	static constexpr const char* TextureStr = "Texture";
+
+	// Voxelize!
+	std::unique_ptr<MeshVoxelizer> MeshVoxelizer_;
 };
 
