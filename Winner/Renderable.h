@@ -3,6 +3,7 @@
 #include "Events.h"
 #include "Mesh.h"
 #include <functional>
+#include "DescriptorHeap.h"
 
 #define RABLEUPDATECALLBACK(Rable, LambdaBody) Rable->SetUpdateCallback([Obj=Rable.get()](const UpdateEventArgs& EventArgs)LambdaBody);
 
@@ -18,8 +19,10 @@ public:
 	DirectX::XMMATRIX WorldMat = Useful::IdentityMatrix();
 	UINT64 CBIndex = 0;
 	std::shared_ptr<MeshGeometry> MeshGeo;
-	std::unordered_map<std::string, UINT64> HeapIndexMap;
+	//std::unordered_map<std::string, UINT64> HeapIndexMap;
 	//std::shared_ptr<MeshData> MeshData; we don't really need this
+	DescriptorHandleDesc ConstantHandleDesc;
+	DescriptorHandleDesc TexHandleDesc;
 
 	template<typename LAMBDA>
 	void SetUpdateCallback(LAMBDA&& InUpdateCallbackLambda) // TODO: experiment with universal reference

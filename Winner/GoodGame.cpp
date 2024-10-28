@@ -12,6 +12,8 @@
 #include <DirectXColors.h>
 #include <algorithm> // For std::min and std::max.
 #include <sstream>
+#include "DescriptorHeap.h"
+
 #if defined(min)
 #undef min
 #endif
@@ -65,7 +67,8 @@ bool GoodGame::LoadContent()
 		dsvHeapDesc.NumDescriptors = 1;
 		dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
 		dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-		ThrowIfFailed(Application::Get().GetDevice()->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_DSVHeap)));
+		DSVHeap = std::make_unique<DescriptorHeap>(dsvHeapDesc);
+		//ThrowIfFailed(Application::Get().GetDevice()->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&DSVHeap)));
 
 		/*
 		Before leaving the LoadContent method, the command list must be executed on the command queue
@@ -184,7 +187,7 @@ void GoodGame::OnRender(RenderEventArgs & e)
 	UINT CurrentBackBufferIndex = m_pWindow->GetCurrentBackBufferIndex();
 	Microsoft::WRL::ComPtr<ID3D12Resource> backBuffer = m_pWindow->GetCurrentBackBuffer();
 	D3D12_CPU_DESCRIPTOR_HANDLE Rtv = m_pWindow->GetCurrentRenderTargetView();
-	D3D12_CPU_DESCRIPTOR_HANDLE Dsv = m_DSVHeap->GetCPUDescriptorHandleForHeapStart();
+	D3D12_CPU_DESCRIPTOR_HANDLE Dsv = DSVHeap->GetCPUHandle(0);
 
 	// Clear the render targets.
 	{
@@ -233,18 +236,16 @@ void GoodGame::OnRender(RenderEventArgs & e)
 		CommandList->IASetVertexBuffers(0, 1, &Rable->MeshGeo->GetVertexBufferView());
 		CommandList->IASetIndexBuffer(&Rable->MeshGeo->GetIndexBufferView());
 		
-		ID3D12DescriptorHeap* ConstantHeaps[] = { ConstantBufferHeap.Get() };
+		ID3D12DescriptorHeap* ConstantHeaps[] = { ConstantBufferHeap->GetHeap() };
 		CommandList->SetDescriptorHeaps(_countof(ConstantHeaps), ConstantHeaps);
-		CD3DX12_GPU_DESCRIPTOR_HANDLE CBHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
-		CBHandle.Offset(Rable->HeapIndexMap[ConstantStr],
-			Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+		CD3DX12_GPU_DESCRIPTOR_HANDLE CBHandle = ConstantBufferHeap->GetGPUHandle(Rable->HeapIndexMap[ConstantStr]);
+		//CBHandle.Offset(Rable->HeapIndexMap[ConstantStr],
+		//	Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
 		CommandList->SetGraphicsRootDescriptorTable(0, CBHandle);
-		
-		ID3D12DescriptorHeap** ShaderResourceHeap = SrvDescriptorHeap.GetAddressOf();
+
+		ID3D12DescriptorHeap* ShaderResourceHeap[] = { SrvDescriptorHeap->GetHeap() };
 		CommandList->SetDescriptorHeaps(1, ShaderResourceHeap);
-		CD3DX12_GPU_DESCRIPTOR_HANDLE SrvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(SrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-		SrvHandle.Offset(Rable->HeapIndexMap[TextureStr],
-			Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+		CD3DX12_GPU_DESCRIPTOR_HANDLE SrvHandle = SrvDescriptorHeap->GetGPUHandle(Rable->HeapIndexMap[TextureStr]);
 		CommandList->SetGraphicsRootDescriptorTable(1, SrvHandle);
 		
 		const UINT IndexCount = Rable->MeshGeo->DrawArgs["default"].IndexCount;
@@ -346,22 +347,49 @@ void GoodGame::OnResize(ResizeEventArgs & e)
 
 void GoodGame::BuildDescriptorHeaps(ID3D12GraphicsCommandList2* CommandList)
 {
-	D3D12_DESCRIPTOR_HEAP_DESC CbvHeapDesc;
+	HeapRegisterDesc CbvHeapDesc;
 	CbvHeapDesc.NumDescriptors = Renderables.size() + MeshVoxelizer::GetConstantBufferCount();
 	CbvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	CbvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	CbvHeapDesc.NodeMask = 0;
+	DescriptorHeapManager* HeapManager = DescriptorHeapManager::Get();
 
+	DescriptorHandleDesc TestHandleDesc1 = HeapManager->RegisterDescriptor(CbvHeapDesc);
+	
+
+	/*
 	WRLComPtr<ID3D12Device2> Device = Application::Get().GetDevice();
 	ThrowIfFailed(Device->CreateDescriptorHeap(&CbvHeapDesc,
 		IID_PPV_ARGS(&ConstantBufferHeap)) );
+	*/
+
+	//ConstantBufferHeap = std::make_unique<DescriptorHeap>(CbvHeapDesc);
 
 	// Shader resource view... textures
 	D3D12_DESCRIPTOR_HEAP_DESC SrvHeapDesc = {};
 	SrvHeapDesc.NumDescriptors = Textures.size() + MeshVoxelizer::GeUAVSRVCount();
 	SrvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
 	SrvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	/*
 	ThrowIfFailed(Device->CreateDescriptorHeap(&SrvHeapDesc, IID_PPV_ARGS(SrvDescriptorHeap.GetAddressOf())));
+	*/
+	//SrvDescriptorHeap = std::make_unique<DescriptorHeap>(SrvHeapDesc);
+	// ----
+	//DescriptorHeapManager* HeapManager = DescriptorHeapManager::Get();
+	/*HeapRegisterDesc ConstHeapDesc;
+	ConstHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	ConstHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	ConstHeapDesc.NodeMask = 0;
+	DescriptorHandleDesc TestHandleDesc1 = HeapManager->RegisterDescriptor(ConstHeapDesc);
+	DescriptorHandleDesc TestHandleDesc3 = HeapManager->RegisterDescriptor(ConstHeapDesc);
+
+	HeapRegisterDesc ShaderHeapDesc = {};
+	ShaderHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	ShaderHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	ShaderHeapDesc.NodeMask = 0;
+	DescriptorHandleDesc TestHandleDesc2 = HeapManager->RegisterDescriptor(ShaderHeapDesc);*/
+
+	HeapManager->OnLoadingFinished();
 }
 
 void GoodGame::BuildShaderResrources(ID3D12GraphicsCommandList2* CommandList)
@@ -371,8 +399,11 @@ void GoodGame::BuildShaderResrources(ID3D12GraphicsCommandList2* CommandList)
 	for (size_t Idx = 0; Idx < Textures.size(); Idx++)
 	{
 		const auto& Tex = Textures[Idx];
-		CD3DX12_CPU_DESCRIPTOR_HANDLE TexHandle(SrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
-		TexHandle.Offset(Idx, HandleIncSize);
+		//CD3DX12_CPU_DESCRIPTOR_HANDLE TexHandle(SrvDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
+		//TexHandle.Offset(Idx, HandleIncSize);
+
+		CD3DX12_CPU_DESCRIPTOR_HANDLE TexHandle = SrvDescriptorHeap->GetCPUHandle(Idx);
+
 		ID3D12Resource* TexResource = Tex->GetDefaultBuffer();
 		D3D12_SHADER_RESOURCE_VIEW_DESC SrvDesc = {};
 		SrvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
@@ -409,8 +440,11 @@ void GoodGame::BuildConstantBuffers(ID3D12GraphicsCommandList2* CommandList)
 	const UINT HandleIncSize = Device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 	for (size_t Idx = 0; Idx < Renderables.size(); Idx++)
 	{
-		CD3DX12_CPU_DESCRIPTOR_HANDLE Handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetCPUDescriptorHandleForHeapStart());
-		Handle.Offset(Idx, HandleIncSize);
+		//CD3DX12_CPU_DESCRIPTOR_HANDLE Handle = CD3DX12_CPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetCPUDescriptorHandleForHeapStart());
+		//CD3DX12_CPU_DESCRIPTOR_HANDLE Handle = ConstantBufferHeap->GetCPUHandle(Idx);
+		
+		//Handle.Offset(Idx, HandleIncSize);
+		DescriptorHeapManager::Get()->
 		D3D12_CONSTANT_BUFFER_VIEW_DESC BufferDesc;
 		BufferDesc.BufferLocation = ObjectConstantBuffer->GetBuffer()->GetGPUVirtualAddress() 
 			+ Idx * ObjectConstantBuffer->GetElementSize();
@@ -587,8 +621,8 @@ void GoodGame::BuildGeometry(ID3D12GraphicsCommandList2* CommandList)
 	//RableBox2->MeshGeo = move(BoxGeometry);
 	//static const string ConstantStr = "Constant";
 	//static const string TextureStr = "Texture";
-	RableBox1->HeapIndexMap[ConstantStr] = 0;
-	RableBox1->HeapIndexMap[TextureStr] = 0;
+	//RableBox1->HeapIndexMap[ConstantStr] = 0;
+	//RableBox1->HeapIndexMap[TextureStr] = 0;
 	
 	//RableBox2->HeapIndexMap[ConstantStr] = 1;
 	//RableBox2->HeapIndexMap[TextureStr] = 0;
@@ -686,8 +720,8 @@ void GoodGame::BuildVoxelizer(ID3D12GraphicsCommandList2* CommandList)
 	VoxelSpec.SceneExtent = 100.f;
 	VoxelSpec.ConstBufferOffset = static_cast<INT>(Renderables.size());
 	VoxelSpec.CommandList = CommandList;
-	VoxelSpec.ConstantBufferHeap = ConstantBufferHeap.Get();
-	VoxelSpec.UAVSRVHeap = SrvDescriptorHeap.Get();
+	VoxelSpec.ConstantBufferHeap = ConstantBufferHeap->GetHeap();
+	VoxelSpec.UAVSRVHeap = SrvDescriptorHeap->GetHeap();
 	VoxelSpec.UAVSRVOffset = Textures.size();
 	MeshVoxelizer_ = std::make_unique<MeshVoxelizer>(VoxelSpec);
 }
@@ -701,7 +735,7 @@ void GoodGame::DoVoxelizerPass(ID3D12GraphicsCommandList2* CommandList)
 	CommandList->SetComputeRootSignature(MeshVoxelizer_->GetVoxelizeResetRootSignature());
 	ID3D12DescriptorHeap* UAVHeap[] =
 	{
-		SrvDescriptorHeap.Get()
+		SrvDescriptorHeap->GetHeap()
 	};
 	CommandList->SetDescriptorHeaps(_countof(UAVHeap), UAVHeap);
 	CommandList->SetComputeRootDescriptorTable(0, MeshVoxelizer_->GetAlbedoTexture()->GetUAVHandleGPU());
@@ -719,7 +753,7 @@ void GoodGame::DoVoxelizerPass(ID3D12GraphicsCommandList2* CommandList)
 
 	CommandList->SetDescriptorHeaps(_countof(UAVHeap), UAVHeap);
 	CommandList->SetGraphicsRootDescriptorTable(4, MeshVoxelizer_->GetAlbedoTexture()->GetUAVHandleGPU());
-	ID3D12DescriptorHeap* ConstantHeaps[] = { ConstantBufferHeap.Get() };
+	ID3D12DescriptorHeap* ConstantHeaps[] = { ConstantBufferHeap->GetHeap() };
 	CommandList->SetDescriptorHeaps(_countof(ConstantHeaps), ConstantHeaps);
 
 	CommandList->SetGraphicsRootDescriptorTable(2, MeshVoxelizer_->GetConstHandleGPU());
@@ -739,18 +773,17 @@ void GoodGame::DoVoxelizerPass(ID3D12GraphicsCommandList2* CommandList)
 		CommandList->IASetVertexBuffers(0, 1, &Rable->MeshGeo->GetVertexBufferView());
 		CommandList->IASetIndexBuffer(&Rable->MeshGeo->GetIndexBufferView());
 
-		ID3D12DescriptorHeap* ConstantHeaps[] = { ConstantBufferHeap.Get() };
+		ID3D12DescriptorHeap* ConstantHeaps[] = { ConstantBufferHeap->GetHeap() };
 		CommandList->SetDescriptorHeaps(_countof(ConstantHeaps), ConstantHeaps);
-		CD3DX12_GPU_DESCRIPTOR_HANDLE CBHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
-		CBHandle.Offset(Rable->HeapIndexMap[ConstantStr],
-			Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+		//CD3DX12_GPU_DESCRIPTOR_HANDLE CBHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(ConstantBufferHeap->GetGPUDescriptorHandleForHeapStart());
+		CD3DX12_GPU_DESCRIPTOR_HANDLE CBHandle = ConstantBufferHeap->GetGPUHandle(Rable->HeapIndexMap[ConstantStr]);
+		//CBHandle.Offset(Rable->HeapIndexMap[ConstantStr],
+			//Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
 		CommandList->SetGraphicsRootDescriptorTable(0, CBHandle);
 
-		ID3D12DescriptorHeap** ShaderResourceHeap = SrvDescriptorHeap.GetAddressOf();
+		ID3D12DescriptorHeap* ShaderResourceHeap[] = { SrvDescriptorHeap->GetHeap() };
 		CommandList->SetDescriptorHeaps(1, ShaderResourceHeap);
-		CD3DX12_GPU_DESCRIPTOR_HANDLE SrvHandle = CD3DX12_GPU_DESCRIPTOR_HANDLE(SrvDescriptorHeap->GetGPUDescriptorHandleForHeapStart());
-		SrvHandle.Offset(Rable->HeapIndexMap[TextureStr],
-			Application::Get().GetDevice()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV));
+		CD3DX12_GPU_DESCRIPTOR_HANDLE SrvHandle = SrvDescriptorHeap->GetGPUHandle(Rable->HeapIndexMap[TextureStr]);
 		CommandList->SetGraphicsRootDescriptorTable(3, SrvHandle);
 
 		const UINT IndexCount = Rable->MeshGeo->DrawArgs["default"].IndexCount;
@@ -920,7 +953,7 @@ void GoodGame::ResizeDepthBuffer(int Width, int Height)
 		dsv.Flags = D3D12_DSV_FLAG_NONE;
 
 		device->CreateDepthStencilView(m_DepthBuffer.Get(), &dsv,
-			m_DSVHeap->GetCPUDescriptorHandleForHeapStart());
+			DSVHeap->GetCPUHandle(0));
 	}
 
 	const float AR = static_cast<float>(GetClientWidth()) / static_cast<float>(GetClientHeight());

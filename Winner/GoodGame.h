@@ -11,6 +11,7 @@
 #include "Texture.h"
 #include "Renderable.h"
 #include "Voxelizer.h"
+#include "DescriptorHeap.h"
 
 struct ObjectConstants
 {
@@ -97,9 +98,12 @@ private:
 	// Depth buffer.
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_DepthBuffer;
 	// Descriptor heap for depth buffer.
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_DSVHeap;
-	WRLComPtr<ID3D12DescriptorHeap> ConstantBufferHeap;
-	WRLComPtr<ID3D12DescriptorHeap> SrvDescriptorHeap;
+	//Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> DSVHeap;
+	std::unique_ptr<DescriptorHeap> DSVHeap;
+	//WRLComPtr<ID3D12DescriptorHeap> ConstantBufferHeap;
+	//std::unique_ptr<DescriptorHeap> ConstantBufferHeap;
+	//WRLComPtr<ID3D12DescriptorHeap> SrvDescriptorHeap;
+	//std::unique_ptr<DescriptorHeap> SrvDescriptorHeap;
 
 	uint64_t FenceValues[Window::BufferCount] = {};
 	//std::unique_ptr<Texture> BoxTexture;

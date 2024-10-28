@@ -168,6 +168,7 @@
     <ClInclude Include="CommandQueue.h" />
     <ClInclude Include="Core.h" />
     <ClInclude Include="d3dx12.h" />
+    <ClInclude Include="DescriptorHeap.h" />
     <ClInclude Include="DX12LibPCH.h" />
     <ClInclude Include="Events.h" />
     <ClInclude Include="framework.h" />
@@ -176,10 +177,12 @@
     <ClInclude Include="Helpers.h" />
     <ClInclude Include="HighResolutionClock.h" />
     <ClInclude Include="KeyCodes.h" />
+    <ClInclude Include="Lights.h" />
     <ClInclude Include="Mesh.h" />
     <ClInclude Include="Renderable.h" />
     <ClInclude Include="RenderTexture.h" />
     <ClInclude Include="Resource.h" />
+    <ClInclude Include="Scene.h" />
     <ClInclude Include="Shader.h" />
     <ClInclude Include="targetver.h" />
     <ClInclude Include="Texture.h" />
@@ -192,12 +195,15 @@
     <ClCompile Include="Application.cpp" />
     <ClCompile Include="CommandQueue.cpp" />
     <ClCompile Include="Core.cpp" />
+    <ClCompile Include="DescriptorHeap.cpp" />
     <ClCompile Include="Game.cpp" />
     <ClCompile Include="GoodGame.cpp" />
     <ClCompile Include="HighResolutionClock.cpp" />
+    <ClCompile Include="Lights.cpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="Renderable.cpp" />
     <ClCompile Include="RenderTexture.cpp" />
+    <ClCompile Include="Scene.cpp" />
     <ClCompile Include="Shader.cpp" />
     <ClCompile Include="Texture.cpp" />
     <ClCompile Include="UploadHelpers.cpp" />
